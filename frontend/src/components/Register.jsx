@@ -5,7 +5,7 @@ export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user'); // State preserves dropdown role value
+  const [role, setRole] = useState('User'); // Default changed to capital 'User'
   const navigate = useNavigate();
 
   const handleRegister = async (e) => {
@@ -76,7 +76,7 @@ export default function Register() {
           />
         </div>
 
-        {/* Dynamic Interactive Role Selection Field */}
+        {/* Updated Options with Capitalized Values */}
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-600 mb-1">Account Role</label>
           <select 
@@ -84,9 +84,8 @@ export default function Register() {
             onChange={(e) => setRole(e.target.value)}
             className="w-full p-2 border border-gray-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium text-gray-700"
           >
-            <option value="user">Standard Member (User)</option>
-            <option value="manager">Project Manager</option>
-            <option value="admin">System Administrator (Admin)</option>
+            <option value="User">Standard Member (User)</option>
+            <option value="Admin">System Administrator (Admin)</option>
           </select>
         </div>
         
