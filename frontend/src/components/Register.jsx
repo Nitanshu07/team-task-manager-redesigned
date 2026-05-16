@@ -5,14 +5,15 @@ export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('User'); // Default changed to capital 'User'
+  const [role, setRole] = useState('User'); // Aligned with your capitalized database requirements
   const navigate = useNavigate();
+
+  // FINAL STEP CHORE: Swapped hardcoded URL for the dynamic environmental configuration variable
+  const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5000"; 
 
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
-      const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app"; 
-
       const response = await fetch(`${BACKEND_URL}/api/auth/register`, {
         method: 'POST',
         headers: {
@@ -76,7 +77,7 @@ export default function Register() {
           />
         </div>
 
-        {/* Updated Options with Capitalized Values */}
+        {/* Dynamic drop-down reading directly as capitalized parameters to fit your validation checks */}
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-600 mb-1">Account Role</label>
           <select 

@@ -6,11 +6,12 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
+  // FINAL STEP CHORE: Draw dynamically from .env config or fall back safely
+  const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5000"; 
+
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app"; 
-
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
@@ -22,11 +23,11 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // Safe stringification check: Saves token and gracefully falls back if user object is structural
+        // Save production tokens safely to client browser storage parameters
         localStorage.setItem('token', data.token);
         localStorage.setItem('user', data.user ? JSON.stringify(data.user) : JSON.stringify({ email }));
         
-        // Force state redirection to dashboard immediately
+        // Force cross-route state navigation directly to the Kanban board layout
         navigate('/dashboard'); 
       } else {
         alert("Authentication failed: " + (data.message || "Invalid credentials"));

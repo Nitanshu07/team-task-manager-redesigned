@@ -5,10 +5,14 @@ export default function Dashboard() {
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newProjectName, setNewProjectName] = useState(''); // Added project text state
   
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+  // Unified production backend URL target string
+  const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
 
   // 1. Fetch Data on Load
   useEffect(() => {
@@ -23,8 +27,8 @@ export default function Dashboard() {
     try {
       const headers = { 'x-auth-token': token };
       const [tasksRes, projsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/tasks', { headers }),
-        fetch('http://localhost:5000/api/projects', { headers })
+        fetch(`${BACKEND_URL}/api/tasks`, { headers }),
+        fetch(`${BACKEND_URL}/api/projects`, { headers })
       ]);
       setTasks(await tasksRes.json());
       setProjects(await projsRes.json());
@@ -33,17 +37,42 @@ export default function Dashboard() {
     }
   };
 
-  // 2. Quick Create Task (Admin Only)
+  // 2. Quick Create Project (Admin Only)
+  const handleCreateProject = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/projects`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
+        body: JSON.stringify({ name: newProjectName })
+      });
+
+      if (response.ok) {
+        alert("Project container initialized successfully!");
+        setNewProjectName('');
+        fetchData(); // Instantly populates project array state
+      } else {
+        const errorData = await response.json();
+        alert("Failed to create project: " + errorData.message);
+      }
+    } catch (err) {
+      console.error("Project setup failed:", err);
+    }
+  };
+
+  // 3. Quick Create Task (Admin Only)
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!projects.length) return alert("Create a project first!");
+    if (!projects || !projects.length) {
+      return alert("Please use the project container tool to make a project first!");
+    }
     
-    await fetch('http://localhost:5000/api/tasks', {
+    await fetch(`${BACKEND_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
       body: JSON.stringify({ 
         title: newTaskTitle, 
-        project: projects[0]._id, // Defaults to first project for speed
+        project: projects[0]._id, // Automatically nests task inside the first valid project
         assignedTo: user.id
       })
     });
@@ -51,9 +80,9 @@ export default function Dashboard() {
     fetchData(); // Refresh the board
   };
 
-  // 3. Move Task Status
+  // 4. Move Task Status
   const updateStatus = async (taskId, newStatus) => {
-    await fetch(`http://localhost:5000/api/tasks/${taskId}`, {
+    await fetch(`${BACKEND_URL}/api/tasks/${taskId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
       body: JSON.stringify({ status: newStatus })
@@ -66,10 +95,11 @@ export default function Dashboard() {
     navigate('/');
   };
 
-  // Filter tasks into columns
-  const todoTasks = tasks.filter(t => t.status === 'Todo');
-  const inProgressTasks = tasks.filter(t => t.status === 'In Progress');
-  const doneTasks = tasks.filter(t => t.status === 'Done');
+  // Filter tasks into columns (accounting for potential non-array responses)
+  const taskArray = Array.isArray(tasks) ? tasks : [];
+  const todoTasks = taskArray.filter(t => t.status === 'Todo' || t.status === 'todo');
+  const inProgressTasks = taskArray.filter(t => t.status === 'In Progress');
+  const doneTasks = taskArray.filter(t => t.status === 'Done');
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -84,22 +114,49 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Admin Controls */}
+      {/* Admin Controls Panel */}
       {user.role === 'Admin' && (
-        <div className="mb-8 bg-white p-4 rounded shadow flex items-center gap-4">
-          <form onSubmit={handleCreateTask} className="flex gap-2 w-full">
-            <input 
-              type="text" 
-              placeholder="New Task Title..." 
-              className="border p-2 rounded flex-1"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              required
-            />
-            <button type="submit" className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600 font-bold">
-              + Add Task
-            </button>
-          </form>
+        <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* A. Create Project Tool Block */}
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-bold text-gray-700 mb-2">Step 1: Initialize Project Container</h3>
+            <form onSubmit={handleCreateProject} className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder="Project Name (e.g., Pixel Pattern Extraction)..." 
+                className="border p-2 rounded flex-1"
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                required
+              />
+              <button type="submit" className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900 font-bold">
+                📁 Build Project
+              </button>
+            </form>
+          </div>
+
+          {/* B. Create Task Tool Block */}
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-bold text-gray-700 mb-2">Step 2: Allocate Task Items</h3>
+            <form onSubmit={handleCreateTask} className="flex gap-2">
+              <input 
+                type="text" 
+                placeholder={projects.length ? "New Task Title..." : "🔒 Build a project first to unlock..."}
+                className="border p-2 rounded flex-1 bg-gray-50 disabled:bg-gray-100"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+                disabled={!projects.length}
+                required
+              />
+              <button 
+                type="submit" 
+                className="bg-green-500 text-white px-6 py-2 rounded hover:bg-green-600 font-bold disabled:opacity-50"
+                disabled={!projects.length}
+              >
+                + Add Task
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -112,7 +169,7 @@ export default function Dashboard() {
           {todoTasks.map(task => (
             <div key={task._id} className="bg-white p-4 rounded shadow mb-3 border-l-4 border-gray-400">
               <h3 className="font-bold">{task.title}</h3>
-              <p className="text-xs text-gray-500 mt-1">Project: {task.project?.name || 'Unassigned'}</p>
+              <p className="text-xs text-gray-500 mt-1">Project: {task.project?.name || (projects[0]?.name || 'Active Project')}</p>
               <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-3 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded w-full hover:bg-blue-200">
                 Move to In Progress ➡️
               </button>
@@ -126,7 +183,7 @@ export default function Dashboard() {
           {inProgressTasks.map(task => (
             <div key={task._id} className="bg-white p-4 rounded shadow mb-3 border-l-4 border-blue-400">
               <h3 className="font-bold">{task.title}</h3>
-              <p className="text-xs text-gray-500 mt-1">Project: {task.project?.name || 'Unassigned'}</p>
+              <p className="text-xs text-gray-500 mt-1">Project: {task.project?.name || (projects[0]?.name || 'Active Project')}</p>
               <div className="flex gap-2 mt-3">
                 <button onClick={() => updateStatus(task._id, 'Todo')} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded flex-1 hover:bg-gray-200">
                   ⬅️ Back
@@ -145,7 +202,7 @@ export default function Dashboard() {
           {doneTasks.map(task => (
             <div key={task._id} className="bg-white p-4 rounded shadow mb-3 border-l-4 border-green-400">
               <h3 className="font-bold text-gray-500 line-through">{task.title}</h3>
-              <p className="text-xs text-gray-400 mt-1">Project: {task.project?.name || 'Unassigned'}</p>
+              <p className="text-xs text-gray-400 mt-1">Project: {task.project?.name || (projects[0]?.name || 'Active Project')}</p>
               <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-3 text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded w-full hover:bg-blue-200">
                 ⬅️ Reopen Task
               </button>
