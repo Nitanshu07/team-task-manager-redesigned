@@ -10,33 +10,36 @@ export default function Login() {
 
   // 2. Function to handle form submission
   const handleLogin = async (e) => {
-  e.preventDefault();
-  try {
-    const response = await fetch('http://localhost:5000/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // IMPORTANT: Make sure your state variables are actually named 'email' and 'password'
-      body: JSON.stringify({ email, password }) 
-    });
+    e.preventDefault();
+    try {
+      // DYNAMIC BACKEND TARGET: Replace this string with your actual live backend Railway URL
+      // (e.g., "https://team-task-manager-production.up.railway.app")
+      const BACKEND_URL = "https://team-task-manager-production.up.railway.app"; 
 
-    const data = await response.json();
+      const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }) 
+      });
 
-    if (response.ok) {
-      // Success! Save the keys and teleport to the dashboard
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/dashboard'); 
-    } else {
-      // This will now pop up the EXACT error from the backend (e.g., "Invalid password")
-      alert("Backend says: " + data.message);
+      const data = await response.json();
+
+      if (response.ok) {
+        // Success! Save the keys and teleport to the dashboard
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        navigate('/dashboard'); 
+      } else {
+        // This pops up the EXACT error from the backend (e.g., "Invalid password")
+        alert("Backend says: " + data.message);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Connection blocked! This is usually a CORS error.");
     }
-  } catch (error) {
-    console.error(error);
-    alert("Connection blocked! This is usually a CORS error.");
-  }
-};
+  };
 
   return (
     <div className="flex items-center justify-center h-[calc(100vh-64px)]">
