@@ -6,7 +6,10 @@ require('dotenv').config();
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: "https://affectionate-recreation-production-4db2.up.railway.app",
+  credentials: true
+}));
 app.use(express.json()); // Allows parsing JSON data
 
 // Database Connection
