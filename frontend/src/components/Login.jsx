@@ -12,9 +12,9 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      // DYNAMIC BACKEND TARGET: Replace this string with your actual live backend Railway URL
-      // (e.g., "https://team-task-manager-production.up.railway.app")
-      const BACKEND_URL = "https://team-task-manager-production.up.railway.app"; 
+      // ⚠️ CRITICAL STEP: Copy the real URL from your Backend block on Railway and paste it below
+      // Make sure it looks like "https://your-backend-service.up.railway.app" without a trailing slash (/)
+      const BACKEND_URL = "team-task-manager-production-58d4.up.railway.app"; 
 
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
         method: 'POST',
