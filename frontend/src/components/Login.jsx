@@ -6,9 +6,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
-  // FINAL STEP CHORE: Draw dynamically from .env config or fall back safely
-  const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5000"; 
-
+  // Hardcode the exact working railway backend service target directly
+  const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
   const handleLogin = async (e) => {
     e.preventDefault();
     try {

@@ -5,12 +5,11 @@ export default function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('User'); // Aligned with your capitalized database requirements
+  const [role, setRole] = useState('User'); 
   const navigate = useNavigate();
 
-  // FINAL STEP CHORE: Swapped hardcoded URL for the dynamic environmental configuration variable
-  const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:5000"; 
-
+  // Hardcode the exact working railway backend service target directly
+  const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
   const handleRegister = async (e) => {
     e.preventDefault();
     try {
