@@ -1,19 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 
 export default function Login() {
-  // 1. State to hold user input
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
-  // 2. Function to handle form submission
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      // ⚠️ CRITICAL STEP: Copy the real URL from your Backend block on Railway and paste it below
-      // Make sure it looks like "https://your-backend-service.up.railway.app" without a trailing slash (/)
       const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app"; 
 
       const response = await fetch(`${BACKEND_URL}/api/auth/login`, {
@@ -27,17 +22,18 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // Success! Save the keys and teleport to the dashboard
+        // Safe stringification check: Saves token and gracefully falls back if user object is structural
         localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem('user', data.user ? JSON.stringify(data.user) : JSON.stringify({ email }));
+        
+        // Force state redirection to dashboard immediately
         navigate('/dashboard'); 
       } else {
-        // This pops up the EXACT error from the backend (e.g., "Invalid password")
-        alert("Backend says: " + data.message);
+        alert("Authentication failed: " + (data.message || "Invalid credentials"));
       }
     } catch (error) {
-      console.error(error);
-      alert("Connection blocked! This is usually a CORS error.");
+      console.error("Login Error details:", error);
+      alert("Something went wrong during login verification.");
     }
   };
 
@@ -52,7 +48,7 @@ export default function Login() {
             type="email" 
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@example.com" 
+            placeholder="admin@test.com" 
             className="w-full p-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" 
             required
           />

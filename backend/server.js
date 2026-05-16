@@ -7,11 +7,11 @@ const app = express();
 
 // Updated Middleware: Allows your live frontend URL to communicate securely
 // Open CORS completely for deployment debugging
+// Ensure this block matches your server.js cors setup exactly
 app.use(cors({
     origin: true,
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
 }));
 
 app.use(express.json()); // Allows parsing JSON data
