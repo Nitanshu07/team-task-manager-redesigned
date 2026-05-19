@@ -9,9 +9,12 @@ const TaskSchema = new mongoose.Schema({
   priority: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Medium' },
   dueDate: { type: Date },
   
-  // --- NEW: Time-Tracking Fields for Dashboard Analytics ---
+  // Time-Tracking Fields
   startedAt: { type: Date },
-  completedAt: { type: Date }
+  completedAt: { type: Date },
+
+  // --- NEW: The critical flag needed to route tasks to the History Log ---
+  isArchived: { type: Boolean, default: false }
   
 }, { timestamps: true });
 
