@@ -56,46 +56,56 @@ router.post('/', async (req, res) => {
 });
 
 // =========================================================================
-// 3. UPDATE INDIVIDUAL STATUS & STAMP EXECUTION TIMERS
+// 3. UPDATE INDIVIDUAL STATUS & AUTOMATICALLY ARCHIVE
 // =========================================================================
 router.put('/:id', async (req, res) => {
   try {
     const token = req.header('x-auth-token');
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_change_this_later');
     const userId = decoded.id;
-    const { status } = req.body;
+    
+    // Accept isArchived flag from the frontend
+    const { status, isArchived } = req.body;
 
-    // A. Log the individual user's status placement
-    const updatedStatus = await UserTaskStatus.findOneAndUpdate(
-      { user: userId, task: req.params.id },
-      { status },
-      { new: true, upsert: true }
-    );
+    // A. Log the individual user's status placement (if status is provided)
+    if (status) {
+      await UserTaskStatus.findOneAndUpdate(
+        { user: userId, task: req.params.id },
+        { status },
+        { new: true, upsert: true }
+      );
+    }
 
-    // B. Time-Tracking Injection: Stamp the core Task document
+    // B. Time-Tracking & Auto-Archive Injection
     const existingTask = await Task.findById(req.params.id);
     if (existingTask) {
       const taskUpdates = {};
       
-      // Stamp start time if it hits 'In Progress' and hasn't been started yet
-      if (status === 'In Progress' && !existingTask.startedAt) {
-        taskUpdates.startedAt = new Date();
+      // If moved to In Progress, start timer and ensure it is UN-archived
+      if (status === 'In Progress') {
+        if (!existingTask.startedAt) taskUpdates.startedAt = new Date();
+        taskUpdates.isArchived = false; 
       }
       
-      // Stamp completion time the moment it hits 'Done'
+      // If marked Done, stamp completion time AND instantly Auto-Archive
       if (status === 'Done') {
         taskUpdates.completedAt = new Date();
+        taskUpdates.isArchived = true; 
       }
 
-      // Save the timestamps to the database if triggered
+      // Manual override just in case the frontend sends it explicitly
+      if (isArchived !== undefined) taskUpdates.isArchived = isArchived;
+      if (status) taskUpdates.status = status; 
+
+      // Save the updates to the database if triggered
       if (Object.keys(taskUpdates).length > 0) {
         await Task.findByIdAndUpdate(req.params.id, taskUpdates);
       }
     }
 
-    return res.status(200).json(updatedStatus);
+    return res.status(200).json({ success: true });
   } catch (err) {
-    return res.status(500).json({ message: 'Server error saving column placement and timestamps' });
+    return res.status(500).json({ message: 'Server error saving updates and archiving' });
   }
 });
 
