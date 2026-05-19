@@ -7,7 +7,7 @@ export default function Dashboard() {
   
   // Navigation & Toggle States
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard'); // Options: dashboard, init-project, create-task, kanban
+  const [activeTab, setActiveTab] = useState('dashboard'); // Options: dashboard, init-project, create-task, task-management
   
   // Form Staging States
   const [newProjectName, setNewProjectName] = useState('');
@@ -45,14 +45,14 @@ export default function Dashboard() {
       body: JSON.stringify({ name: newProjectName, admin: user.id || user._id })
     });
     setNewProjectName('');
-    alert("Project Module Initialized Successfully!");
+    alert("Project Created Successfully!");
     fetchData();
-    setActiveTab('create-task'); // Auto route to task creation
+    setActiveTab('create-task'); 
   };
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!projects || !projects.length) return alert("Initialize a project container first!");
+    if (!projects || !projects.length) return alert("Please create a project first.");
     
     await fetch(`${BACKEND_URL}/api/tasks`, {
       method: 'POST',
@@ -66,7 +66,7 @@ export default function Dashboard() {
       })
     });
     setTaskForm({ title: '', description: '', priority: 'Medium', dueDate: '' });
-    alert("Task Deployed Successfully!");
+    alert("Task Assigned Successfully!");
     fetchData();
   };
 
@@ -81,7 +81,8 @@ export default function Dashboard() {
 
   // --- ANALYTICAL CALCULATIONS ---
   const taskArray = Array.isArray(tasks) ? tasks : [];
-  const todoTasks = taskArray.filter(t => t.status === 'Todo' || t.status === 'todo');
+  // Matching exact required assignment statuses: To Do, In Progress, Done
+  const todoTasks = taskArray.filter(t => t.status === 'Todo' || t.status === 'todo' || t.status === 'To Do');
   const inProgressTasks = taskArray.filter(t => t.status === 'In Progress');
   const doneTasks = taskArray.filter(t => t.status === 'Done');
   
@@ -97,7 +98,7 @@ export default function Dashboard() {
   const donePct = Math.round((doneTasks.length / totalCount) * 100);
   const overduePct = Math.round((overdueTasks.length / totalCount) * 100);
 
-  // --- ICONS (Inline SVGs for portability) ---
+  // --- ICONS ---
   const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>;
   const IconDash = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>;
   const IconFolder = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>;
@@ -112,27 +113,30 @@ export default function Dashboard() {
       <div className={`bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
         <div className="p-6 border-b border-slate-800 flex flex-col h-20 justify-center min-w-[16rem]">
           <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-            <span className="bg-indigo-600 w-2.5 h-5 rounded-sm inline-block"></span> Workspace
+            <span className="bg-indigo-600 w-2.5 h-5 rounded-sm inline-block"></span> Team Tasks
           </h2>
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto min-w-[16rem]">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2 mt-2">Metrics & Views</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2 mt-2">Views</p>
           <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-            <IconDash /> Global Dashboard
+            <IconDash /> Dashboard
           </button>
-          <button onClick={() => setActiveTab('kanban')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'kanban' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-            <IconBoard /> Kanban Pipeline
+          
+          {/* Renamed to exactly match assignment parameters */}
+          <button onClick={() => setActiveTab('task-management')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'task-management' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
+            <IconBoard /> Task Management
           </button>
 
+          {/* Role-Based Access controls */}
           {user.role === 'Admin' && (
             <>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2 mt-8">Admin Controls</p>
               <button onClick={() => setActiveTab('init-project')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'init-project' ? 'bg-emerald-600/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                <IconFolder /> Initialize Project
+                <IconFolder /> Create Project
               </button>
               <button onClick={() => setActiveTab('create-task')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'create-task' ? 'bg-emerald-600/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                <IconPlus /> Deploy Task
+                <IconPlus /> Assign Tasks
               </button>
             </>
           )}
@@ -166,127 +170,119 @@ export default function Dashboard() {
           </div>
           
           <button onClick={() => { localStorage.clear(); navigate('/'); }} className="flex items-center bg-slate-900 hover:bg-red-950/40 text-slate-300 hover:text-red-400 font-semibold px-4 py-2 rounded-xl transition border border-slate-800 hover:border-red-900/60 text-xs">
-            <IconLogout /> Terminate Session
+            <IconLogout /> Log Out
           </button>
         </header>
 
         {/* Dynamic Content Area */}
         <main className="flex-1 overflow-y-auto p-8 bg-slate-950 relative">
           
-          {/* TAB 1: DASHBOARD (Graphical & Numerical) */}
+          {/* TAB 1: DASHBOARD (Assignment Req 4) */}
           {activeTab === 'dashboard' && (
             <div className="max-w-6xl mx-auto animation-fade-in">
               <div className="mb-8">
-                <h2 className="text-2xl font-black text-white mb-2">Metrics Overview</h2>
-                <p className="text-slate-400 text-sm">Real-time telemetry on active task allocations.</p>
+                <h2 className="text-2xl font-black text-white mb-2">Dashboard</h2>
+                <p className="text-slate-400 text-sm">Overview of total tasks and tasks by status.</p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                {/* Active Card */}
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
                   <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Load</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Tasks (To Do)</span>
                     <span className="text-3xl font-black text-white">{todoTasks.length}</span>
                   </div>
                   <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${todoPct}%` }}></div></div>
-                  <span className="text-[10px] text-slate-500">{todoPct}% of total volume</span>
                 </div>
                 
-                {/* Execution Card */}
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
                   <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest">In Execution</span>
+                    <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest">In Progress</span>
                     <span className="text-3xl font-black text-cyan-400">{inProgressTasks.length}</span>
                   </div>
                   <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: `${progressPct}%` }}></div></div>
-                  <span className="text-[10px] text-slate-500">{progressPct}% of total volume</span>
                 </div>
 
-                {/* Resolved Card */}
                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
                   <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Resolved</span>
+                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Done</span>
                     <span className="text-3xl font-black text-emerald-400">{doneTasks.length}</span>
                   </div>
                   <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${donePct}%` }}></div></div>
-                  <span className="text-[10px] text-slate-500">{donePct}% of total volume</span>
                 </div>
 
-                {/* Overdue Card */}
                 <div className="bg-slate-900 p-6 rounded-2xl border border-red-900/30 bg-red-950/10 shadow-lg">
                   <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Overdue</span>
+                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Overdue Tasks</span>
                     <span className="text-3xl font-black text-red-400">{overdueTasks.length}</span>
                   </div>
                   <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${overduePct}%` }}></div></div>
-                  <span className="text-[10px] text-slate-500">{overduePct}% of total volume</span>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 2: INIT PROJECT (Admin Only) */}
+          {/* TAB 2: CREATE PROJECT (Admin Only) */}
           {activeTab === 'init-project' && user.role === 'Admin' && (
             <div className="max-w-2xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
-              <h2 className="text-2xl font-black text-white mb-2">Initialize Project</h2>
-              <p className="text-slate-400 text-sm mb-8">Create a new container branch for tasks to populate within.</p>
+              <h2 className="text-2xl font-black text-white mb-2">Create Project</h2>
+              <p className="text-slate-400 text-sm mb-8">Establish a project to assign tasks to.</p>
               
               <form onSubmit={handleCreateProject} className="space-y-6">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Project Designation</label>
-                  <input type="text" placeholder="e.g. Q4 Website Redesign" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} required />
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Project Name</label>
+                  <input type="text" placeholder="Project Name..." className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} required />
                 </div>
-                <button type="submit" className="w-full bg-white hover:bg-slate-200 text-slate-900 font-bold py-4 rounded-xl transition shadow-lg text-sm">Deploy Project Module</button>
+                <button type="submit" className="w-full bg-white hover:bg-slate-200 text-slate-900 font-bold py-4 rounded-xl transition shadow-lg text-sm">Create Project</button>
               </form>
             </div>
           )}
 
-          {/* TAB 3: CREATE TASK (Admin Only) */}
+          {/* TAB 3: ASSIGN TASKS (Admin Only) */}
           {activeTab === 'create-task' && user.role === 'Admin' && (
             <div className="max-w-3xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
-              <h2 className="text-2xl font-black text-white mb-2">Deploy Task Payload</h2>
-              <p className="text-slate-400 text-sm mb-8">Structure a new assignment and drop it into the global workspace.</p>
+              <h2 className="text-2xl font-black text-white mb-2">Create and Assign Tasks</h2>
+              <p className="text-slate-400 text-sm mb-8">Set titles, descriptions, due dates, and priority levels.</p>
               
               <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Task Title</label>
-                  <input type="text" placeholder="Objective name..." className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition" value={taskForm.title} onChange={(e) => setTaskForm({...taskForm, title: e.target.value})} required />
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Title</label>
+                  <input type="text" placeholder="Task Title..." className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition" value={taskForm.title} onChange={(e) => setTaskForm({...taskForm, title: e.target.value})} required />
                 </div>
                 
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Description</label>
-                  <textarea placeholder="Functional requirements..." rows="3" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition resize-none" value={taskForm.description} onChange={(e) => setTaskForm({...taskForm, description: e.target.value})} />
+                  <textarea placeholder="Task Description..." rows="3" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition resize-none" value={taskForm.description} onChange={(e) => setTaskForm({...taskForm, description: e.target.value})} />
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Priority Level</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Priority</label>
                   <select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500 transition" value={taskForm.priority} onChange={(e) => setTaskForm({...taskForm, priority: e.target.value})}>
-                    <option value="Low">Low Priority</option>
-                    <option value="Medium">Medium Priority</option>
-                    <option value="High">High Priority</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
                   </select>
                 </div>
                 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Target Deadline</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Due Date</label>
                   <input type="date" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500 transition" value={taskForm.dueDate} onChange={(e) => setTaskForm({...taskForm, dueDate: e.target.value})} />
                 </div>
 
                 <button type="submit" className="md:col-span-2 mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition shadow-lg shadow-indigo-500/20 text-sm" disabled={!projects.length}>
-                  {projects.length ? '+ Commit Task Structure' : '⚠️ No Projects Available to Host Task'}
+                  {projects.length ? 'Assign Task to Users' : '⚠️ No Projects Available to Host Task'}
                 </button>
               </form>
             </div>
           )}
 
-          {/* TAB 4: KANBAN BOARD */}
-          {activeTab === 'kanban' && (
+          {/* TAB 4: TASK MANAGEMENT (Visible to both Admin & Members) */}
+          {activeTab === 'task-management' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full pb-10">
               
-              {/* TODO Column */}
+              {/* TO DO Column */}
               <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
                 <h2 className="font-bold text-xs uppercase tracking-widest text-slate-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                  <span>📌 Assigned</span> <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-black">{todoTasks.length}</span>
+                  <span>📌 To Do</span> <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-black">{todoTasks.length}</span>
                 </h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                   {todoTasks.map(task => (
@@ -296,8 +292,8 @@ export default function Dashboard() {
                         <h4 className="font-bold text-white text-sm tracking-tight">{task.title}</h4>
                       </div>
                       <p className="text-xs text-slate-400 mt-2 pl-2 line-clamp-2">{task.description}</p>
-                      {task.dueDate && <p className="text-[10px] text-slate-500 mt-3 font-semibold pl-2">📅 {new Date(task.dueDate).toLocaleDateString()}</p>}
-                      <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-4 ml-2 text-[11px] bg-slate-800 hover:bg-indigo-600/20 text-indigo-400 border border-slate-700 hover:border-indigo-500/50 font-bold py-2 rounded-lg w-[calc(100%-8px)] transition text-center">Commence Run ➡️</button>
+                      {task.dueDate && <p className="text-[10px] text-slate-500 mt-3 font-semibold pl-2">📅 Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
+                      <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-4 ml-2 text-[11px] bg-slate-800 hover:bg-indigo-600/20 text-indigo-400 border border-slate-700 hover:border-indigo-500/50 font-bold py-2 rounded-lg w-[calc(100%-8px)] transition text-center">Move to In Progress ➡️</button>
                     </div>
                   ))}
                 </div>
@@ -315,8 +311,8 @@ export default function Dashboard() {
                       <h4 className="font-bold text-white text-sm tracking-tight pl-2">{task.title}</h4>
                       <p className="text-xs text-slate-400 mt-2 pl-2 line-clamp-2">{task.description}</p>
                       <div className="grid grid-cols-2 gap-2 mt-4 pl-2">
-                        <button onClick={() => updateStatus(task._id, 'Todo')} className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">⬅️ Revert</button>
-                        <button onClick={() => updateStatus(task._id, 'Done')} className="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition">Resolve ✓</button>
+                        <button onClick={() => updateStatus(task._id, 'Todo')} className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">⬅️ To Do</button>
+                        <button onClick={() => updateStatus(task._id, 'Done')} className="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition">Mark Done ✓</button>
                       </div>
                     </div>
                   ))}
@@ -326,13 +322,13 @@ export default function Dashboard() {
               {/* DONE Column */}
               <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
                 <h2 className="font-bold text-xs uppercase tracking-widest text-emerald-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800">
-                  <span>✅ Completed</span> <span className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black">{doneTasks.length}</span>
+                  <span>✅ Done</span> <span className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black">{doneTasks.length}</span>
                 </h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                   {doneTasks.map(task => (
                     <div key={task._id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-sm opacity-60">
                       <h4 className="font-bold text-slate-400 text-sm line-through tracking-tight">{task.title}</h4>
-                      <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-4 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-1.5 rounded-lg w-full transition">🔄 Reopen</button>
+                      <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-4 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-1.5 rounded-lg w-full transition">🔄 Back to In Progress</button>
                     </div>
                   ))}
                 </div>
