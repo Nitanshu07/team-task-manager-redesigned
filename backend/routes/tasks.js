@@ -1,40 +1,45 @@
 const express = require('express');
 const router = express.Router();
 const Task = require('../models/Task');
-const { protect, adminOnly } = require('../middleware/auth');
 
 // Get all tasks
-router.get('/', protect, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const tasks = await Task.find().populate('assignedTo', 'name email').populate('project', 'name');
-    res.json(tasks);
+    const tasks = await Task.find().populate('project assignedTo', 'name email');
+    return res.status(200).json(tasks);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error fetching tasks' });
   }
 });
 
-// Create a task (Admin only)
-router.post('/', protect, adminOnly, async (req, res) => {
+// Create task with assignment parameters
+router.post('/', async (req, res) => {
   try {
-    const newTask = new Task(req.body);
-    const savedTask = await newTask.save();
-    res.json(savedTask);
+    const { title, description, project, assignedTo, priority, dueDate } = req.body;
+    
+    const newTask = new Task({
+      title,
+      description,
+      project,
+      assignedTo: assignedTo || null,
+      priority: priority || 'Medium',
+      dueDate: dueDate || null
+    });
+
+    await newTask.save();
+    return res.status(201).json(newTask);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error creating task' });
   }
 });
 
-// Update task status (Anyone assigned to it can update)
-router.put('/:id', protect, async (req, res) => {
+// Update Task status / attributes
+router.put('/:id', async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: 'Task not found' });
-
-    task.status = req.body.status || task.status;
-    await task.save();
-    res.json(task);
+    const updatedTask = await Task.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    return res.status(200).json(updatedTask);
   } catch (err) {
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error updating task' });
   }
 });
 
