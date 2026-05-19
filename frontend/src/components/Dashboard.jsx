@@ -97,9 +97,6 @@ export default function Dashboard() {
     return diffHrs > 0 ? `${diffHrs}h ${diffMins}m` : `${diffMins}m`;
   };
 
-  // =========================================================================
-  // --- ROLE-BASED TASK FILTERING ---
-  // =========================================================================
   const loggedInUserId = user.id || user._id;
   const rawTasks = Array.isArray(tasks) ? tasks : [];
   
@@ -107,13 +104,12 @@ export default function Dashboard() {
     ? rawTasks 
     : rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === loggedInUserId || t.assignedTo === loggedInUserId));
 
-  // Active board filters out archived tasks. The History tab ONLY shows archived tasks.
   const activeBoardTasks = userVisibleTasks.filter(t => !t.isArchived);
   const archivedHistoryTasks = userVisibleTasks.filter(t => t.isArchived);
 
   const todoTasks = activeBoardTasks.filter(t => t.status === 'Todo' || t.status === 'todo' || t.status === 'To Do');
   const inProgressTasks = activeBoardTasks.filter(t => t.status === 'In Progress');
-  const doneTasks = activeBoardTasks.filter(t => t.status === 'Done'); // Technically empty due to auto-archive, but kept for logic safety
+  const doneTasks = activeBoardTasks.filter(t => t.status === 'Done'); 
   const overdueTasks = activeBoardTasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate) < new Date());
 
   const totalCount = activeBoardTasks.length || 1; 
@@ -122,9 +118,6 @@ export default function Dashboard() {
   const donePct = Math.round((doneTasks.length / totalCount) * 100);
   const overduePct = Math.round((overdueTasks.length / totalCount) * 100);
 
-  // =========================================================================
-  // --- TEAM MONITOR FILTERING (Includes Archived Tasks in calculation) ---
-  // =========================================================================
   const monitoredUsers = usersList.filter(u => u.role !== 'Admin' && u.role !== 'admin');
 
   const teamWorkloads = monitoredUsers.map(dbUser => {
@@ -139,14 +132,13 @@ export default function Dashboard() {
       const status = t.status?.toLowerCase() || 'todo';
       if (status.includes('todo') || status === 'to do') todo++;
       else if (status === 'in progress') inProgress++;
-      else if (status === 'done' || t.isArchived) done++; // Archived tasks accurately count towards their historical output!
+      else if (status === 'done' || t.isArchived) done++; 
       if (t.dueDate && new Date(t.dueDate) < new Date() && status !== 'done' && !t.isArchived) overdue++;
     });
 
     return { name: dbUser.name, role: dbUser.role, isOnline, total: assignedTasks.length, todo, inProgress, done, overdue };
   });
 
-  // --- ICONS ---
   const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>;
   const IconDash = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>;
   const IconFolder = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>;
@@ -269,7 +261,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* NEW TAB: TASK HISTORY / COMPLETED LOG WITH ACTIONS */}
+          {/* TAB: COMPLETED LOG WITH ASSIGNED USER DATA */}
           {activeTab === 'task-history' && (
             <div className="max-w-6xl mx-auto animation-fade-in">
               <div className="mb-8 flex justify-between items-end">
@@ -292,6 +284,7 @@ export default function Dashboard() {
                       <thead>
                         <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-400">
                           <th className="p-4 font-bold">Task Title</th>
+                          <th className="p-4 font-bold">Assigned To</th> {/* NEW: User column */}
                           <th className="p-4 font-bold">Priority</th>
                           <th className="p-4 font-bold">Time Taken</th>
                           <th className="p-4 font-bold">Completed On</th>
@@ -304,6 +297,12 @@ export default function Dashboard() {
                             <td className="p-4">
                               <p className="text-sm font-bold text-slate-200">{task.title}</p>
                               <p className="text-xs text-slate-500 truncate max-w-xs">{task.description}</p>
+                            </td>
+                            {/* NEW: Displaying the assigned user's name */}
+                            <td className="p-4">
+                              <p className="text-xs font-bold text-indigo-300 bg-indigo-900/20 inline-block px-2 py-1 rounded-md border border-indigo-900/50">
+                                {task.assignedTo?.name || 'Unassigned'}
+                              </p>
                             </td>
                             <td className="p-4">
                               <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${task.priority === 'High' ? 'bg-red-900/30 text-red-400' : task.priority === 'Medium' ? 'bg-amber-900/30 text-amber-400' : 'bg-slate-800 text-slate-300'}`}>
@@ -383,7 +382,10 @@ export default function Dashboard() {
                 <div className="md:col-span-2"><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Description</label><textarea placeholder="Task Description..." rows="3" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 resize-none" value={taskForm.description} onChange={(e) => setTaskForm({...taskForm, description: e.target.value})} /></div>
                 <div className="md:col-span-2"><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Assign To User</label><select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.assignedTo} onChange={(e) => setTaskForm({...taskForm, assignedTo: e.target.value})}><option value="">Leave Unassigned</option>{usersList.map(u => (<option key={u._id} value={u._id}>{u.name} ({u.role})</option>))}</select></div>
                 <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Priority</label><select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.priority} onChange={(e) => setTaskForm({...taskForm, priority: e.target.value})}><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div>
-                <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Due Date</label><input type="date" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.dueDate} onChange={(e) => setTaskForm({...taskForm, dueDate: e.target.value})} /></div>
+                
+                {/* NEW: CSS hack [color-scheme:dark] added to force the browser to render the white calendar icon */}
+                <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Due Date</label><input type="date" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500 transition [color-scheme:dark]" value={taskForm.dueDate} onChange={(e) => setTaskForm({...taskForm, dueDate: e.target.value})} /></div>
+                
                 <button type="submit" className="md:col-span-2 mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition shadow-lg text-sm" disabled={!projects.length}>{projects.length ? 'Assign Task' : '⚠️ No Projects Available'}</button>
               </form>
             </div>
@@ -431,14 +433,11 @@ export default function Dashboard() {
               <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
                 <h2 className="font-bold text-xs uppercase tracking-widest text-emerald-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800"><span>✅ Done</span></h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                  
-                  {/* HELPER GRAPHIC TO EXPLAIN AUTO-ARCHIVE TO THE USER */}
                   <div className="border border-dashed border-emerald-900/30 rounded-xl p-8 flex flex-col items-center justify-center h-full opacity-60 text-center">
                       <span className="text-3xl mb-3">📁</span>
                       <p className="text-slate-400 text-xs font-semibold">Automated Storage</p>
                       <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">When you mark a task as Done, it is instantly routed to your Completed Log to keep this board clean.</p>
                   </div>
-
                 </div>
               </div>
             </div>
