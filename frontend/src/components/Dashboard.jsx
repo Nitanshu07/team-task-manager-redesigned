@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 export default function Dashboard() {
   const [tasks, setTasks] = useState([]);
   const [projects, setProjects] = useState([]);
-  const [usersList, setUsersList] = useState([]); // NEW: Stores all DB users
+  const [usersList, setUsersList] = useState([]); 
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard'); 
@@ -37,7 +37,6 @@ export default function Dashboard() {
   const fetchData = async () => {
     try {
       const headers = { 'x-auth-token': token };
-      // NEW: Fetching the Users list alongside tasks and projects
       const [tasksRes, projsRes, usersRes] = await Promise.all([
         fetch(`${BACKEND_URL}/api/tasks`, { headers }),
         fetch(`${BACKEND_URL}/api/projects`, { headers }),
@@ -111,7 +110,17 @@ export default function Dashboard() {
     return diffHrs > 0 ? `${diffHrs}h ${diffMins}m` : `${diffMins}m`;
   };
 
-  const taskArray = Array.isArray(tasks) ? tasks : [];
+  // =========================================================================
+  // --- ROLE-BASED TASK FILTERING ---
+  // =========================================================================
+  const loggedInUserId = user.id || user._id;
+  const rawTasks = Array.isArray(tasks) ? tasks : [];
+  
+  // Admins see all tasks. Standard users ONLY see tasks assigned to them.
+  const taskArray = user.role === 'Admin' 
+    ? rawTasks 
+    : rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === loggedInUserId || t.assignedTo === loggedInUserId));
+
   const todoTasks = taskArray.filter(t => t.status === 'Todo' || t.status === 'todo' || t.status === 'To Do');
   const inProgressTasks = taskArray.filter(t => t.status === 'In Progress');
   const doneTasks = taskArray.filter(t => t.status === 'Done');
@@ -123,10 +132,15 @@ export default function Dashboard() {
   const donePct = Math.round((doneTasks.length / totalCount) * 100);
   const overduePct = Math.round((overdueTasks.length / totalCount) * 100);
 
-  // --- UPGRADED: Maps over ALL registered users from the database ---
-  const teamWorkloads = usersList.map(dbUser => {
-    // Find tasks assigned specifically to this user
-    const assignedTasks = taskArray.filter(t => t.assignedTo && (t.assignedTo._id === dbUser._id || t.assignedTo === dbUser._id));
+  // =========================================================================
+  // --- TEAM MONITOR FILTERING ---
+  // =========================================================================
+  // Filter out Admins so the Team Monitor ONLY displays standard users
+  const monitoredUsers = usersList.filter(u => u.role !== 'Admin' && u.role !== 'admin');
+
+  const teamWorkloads = monitoredUsers.map(dbUser => {
+    // Find tasks assigned specifically to this user (pulling from rawTasks so Admin sees everything)
+    const assignedTasks = rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === dbUser._id || t.assignedTo === dbUser._id));
     
     let isOnline = false;
     if (dbUser.lastActive) {
@@ -146,21 +160,6 @@ export default function Dashboard() {
 
     return { name: dbUser.name, role: dbUser.role, isOnline, total: assignedTasks.length, todo, inProgress, done, overdue };
   });
-
-  // Calculate purely unassigned tasks to show in a separate card
-  const unassignedArray = taskArray.filter(t => !t.assignedTo);
-  let uTodo = 0, uInProgress = 0, uDone = 0, uOverdue = 0;
-  unassignedArray.forEach(t => {
-    const status = t.status?.toLowerCase() || 'todo';
-    if (status.includes('todo') || status === 'to do') uTodo++;
-    else if (status === 'in progress') uInProgress++;
-    else if (status === 'done') uDone++;
-    if (t.dueDate && new Date(t.dueDate) < new Date() && status !== 'done') uOverdue++;
-  });
-  
-  if (unassignedArray.length > 0) {
-    teamWorkloads.unshift({ name: 'Unassigned Workspace', role: 'System', isOnline: true, total: unassignedArray.length, todo: uTodo, inProgress: uInProgress, done: uDone, overdue: uOverdue });
-  }
 
   // --- ICONS ---
   const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>;
@@ -246,7 +245,9 @@ export default function Dashboard() {
             <div className="max-w-6xl mx-auto animation-fade-in">
               <div className="mb-8">
                 <h2 className="text-2xl font-black text-white mb-2">Dashboard</h2>
-                <p className="text-slate-400 text-sm">Overview of total tasks and tasks by status.</p>
+                <p className="text-slate-400 text-sm">
+                  {user.role === 'Admin' ? 'Overview of all global tasks and statuses.' : 'Overview of your assigned tasks and statuses.'}
+                </p>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
@@ -285,12 +286,12 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 2: TEAM MONITOR WITH PRESENCE TRACKING */}
+          {/* TAB 2: TEAM MONITOR */}
           {activeTab === 'team-monitor' && user.role === 'Admin' && (
              <div className="max-w-6xl mx-auto animation-fade-in">
               <div className="mb-8">
                 <h2 className="text-2xl font-black text-white mb-2">Team Workload Monitor</h2>
-                <p className="text-slate-400 text-sm">Track individual task distribution and real-time operational status.</p>
+                <p className="text-slate-400 text-sm">Track individual task distribution and real-time operational status for standard users.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -303,16 +304,13 @@ export default function Dashboard() {
                       <div>
                         <h3 className="text-white font-bold flex items-center gap-2">
                           {member.name}
-                          {/* Online/Offline Status Indicator */}
-                          {member.name !== 'Unassigned Workspace' && (
-                            <span className="flex items-center gap-1 text-[9px] uppercase tracking-widest font-black">
-                              {member.isOnline ? (
-                                <span className="text-emerald-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> Online</span>
-                              ) : (
-                                <span className="text-slate-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600"></span> Offline</span>
-                              )}
-                            </span>
-                          )}
+                          <span className="flex items-center gap-1 text-[9px] uppercase tracking-widest font-black">
+                            {member.isOnline ? (
+                              <span className="text-emerald-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> Online</span>
+                            ) : (
+                              <span className="text-slate-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600"></span> Offline</span>
+                            )}
+                          </span>
                         </h3>
                         <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{member.role} • {member.total} Assigned</p>
                       </div>
@@ -361,7 +359,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 4: ASSIGN TASKS (Now with dropdown!) */}
+          {/* TAB 4: ASSIGN TASKS */}
           {activeTab === 'create-task' && user.role === 'Admin' && (
             <div className="max-w-3xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
               <h2 className="text-2xl font-black text-white mb-2">Create and Assign Tasks</h2>
@@ -378,11 +376,11 @@ export default function Dashboard() {
                   <textarea placeholder="Task Description..." rows="3" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 transition resize-none" value={taskForm.description} onChange={(e) => setTaskForm({...taskForm, description: e.target.value})} />
                 </div>
 
-                {/* NEW: USER DROPDOWN */}
                 <div className="md:col-span-2">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Assign To User</label>
                   <select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500 transition" value={taskForm.assignedTo} onChange={(e) => setTaskForm({...taskForm, assignedTo: e.target.value})}>
                     <option value="">Leave Unassigned</option>
+                    {/* Exclude Admin from dropdown selection if desired, or let Admin assign to anyone */}
                     {usersList.map(u => (
                       <option key={u._id} value={u._id}>{u.name} ({u.role})</option>
                     ))}
@@ -419,6 +417,7 @@ export default function Dashboard() {
                   <span>📌 To Do</span> <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-black">{todoTasks.length}</span>
                 </h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                  {todoTasks.length === 0 ? <p className="text-slate-600 text-xs text-center mt-4">No pending tasks.</p> : null}
                   {todoTasks.map(task => (
                     <div key={task._id} className="bg-slate-900 p-4 rounded-xl border border-slate-700/60 shadow-sm relative overflow-hidden group">
                       <div className={`absolute top-0 left-0 w-1 h-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-amber-500' : 'bg-slate-600'}`}></div>
@@ -438,6 +437,7 @@ export default function Dashboard() {
                   <span>⏳ In Progress</span> <span className="bg-cyan-950 text-cyan-400 px-2 py-0.5 rounded text-[10px] font-black">{inProgressTasks.length}</span>
                 </h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                  {inProgressTasks.length === 0 ? <p className="text-slate-600 text-xs text-center mt-4">No active tasks.</p> : null}
                   {inProgressTasks.map(task => (
                     <div key={task._id} className="bg-slate-900 p-4 rounded-xl border border-cyan-900/30 shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
@@ -464,6 +464,7 @@ export default function Dashboard() {
                   <span>✅ Done</span> <span className="bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-black">{doneTasks.length}</span>
                 </h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+                  {doneTasks.length === 0 ? <p className="text-slate-600 text-xs text-center mt-4">No completed tasks.</p> : null}
                   {doneTasks.map(task => (
                     <div key={task._id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-sm opacity-60">
                       <h4 className="font-bold text-slate-400 text-sm line-through tracking-tight">{task.title}</h4>
