@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken'); // ⚠️ CRITICAL: Ensure this import is present!
+const jwt = require('jsonwebtoken'); 
 
 const Task = require('../models/Task');
-const UserTaskStatus = require('../models/UserTaskStatus'); // ⚠️ Must match filename case exactly!
+const UserTaskStatus = require('../models/UserTaskStatus'); 
 
 // =========================================================================
 // 1. GET ALL TASKS (Globally visible, individually tracked)
@@ -51,7 +51,7 @@ router.post('/', async (req, res) => {
 });
 
 // =========================================================================
-// 3. UPDATE INDIVIDUAL STATUS ONLY
+// 3. UPDATE INDIVIDUAL STATUS & STAMP EXECUTION TIMERS
 // =========================================================================
 router.put('/:id', async (req, res) => {
   try {
@@ -60,15 +60,37 @@ router.put('/:id', async (req, res) => {
     const userId = decoded.id;
     const { status } = req.body;
 
+    // A. Log the individual user's status placement
     const updatedStatus = await UserTaskStatus.findOneAndUpdate(
       { user: userId, task: req.params.id },
       { status },
       { new: true, upsert: true }
     );
 
+    // B. Time-Tracking Injection: Stamp the core Task document
+    const existingTask = await Task.findById(req.params.id);
+    if (existingTask) {
+      const taskUpdates = {};
+      
+      // Stamp start time if it hits 'In Progress' and hasn't been started yet
+      if (status === 'In Progress' && !existingTask.startedAt) {
+        taskUpdates.startedAt = new Date();
+      }
+      
+      // Stamp completion time the moment it hits 'Done'
+      if (status === 'Done') {
+        taskUpdates.completedAt = new Date();
+      }
+
+      // Save the timestamps to the database if triggered
+      if (Object.keys(taskUpdates).length > 0) {
+        await Task.findByIdAndUpdate(req.params.id, taskUpdates);
+      }
+    }
+
     return res.status(200).json(updatedStatus);
   } catch (err) {
-    return res.status(500).json({ message: 'Server error saving column placement' });
+    return res.status(500).json({ message: 'Server error saving column placement and timestamps' });
   }
 });
 

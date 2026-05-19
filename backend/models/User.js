@@ -16,9 +16,16 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    default: 'user'
+    enum: ['Admin', 'User', 'admin', 'user'], // Allows flexibility but enforces specific tiers
+    default: 'User'
   },
   date: {
+    type: Date,
+    default: Date.now
+  },
+  
+  // --- NEW: Real-time Presence Tracking ---
+  lastActive: {
     type: Date,
     default: Date.now
   }

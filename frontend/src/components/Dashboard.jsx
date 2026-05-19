@@ -16,10 +16,28 @@ export default function Dashboard() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
 
+  // --- NEW: HEARTBEAT PING SYSTEM ---
   useEffect(() => {
     if (!token) { navigate('/'); return; }
+    
+    // 1. Initial Data Pull & Ping
     fetchData();
+    pingServer();
+
+    // 2. Silent Heartbeat: Pings backend every 60 seconds to stay "Online"
+    const pingInterval = setInterval(() => {
+      pingServer();
+    }, 60000);
+
+    return () => clearInterval(pingInterval);
   }, [navigate, token]);
+
+  const pingServer = () => {
+    fetch(`${BACKEND_URL}/api/auth/ping`, {
+      method: 'POST',
+      headers: { 'x-auth-token': token }
+    }).catch(err => console.log("Ping skipped"));
+  };
 
   const fetchData = async () => {
     try {
@@ -77,6 +95,20 @@ export default function Dashboard() {
     fetchData();
   };
 
+  // --- NEW: TIME TRACKING ENGINE ---
+  const formatCycleTime = (start, end) => {
+    if (!start) return null;
+    const startTime = new Date(start).getTime();
+    const endTime = end ? new Date(end).getTime() : new Date().getTime();
+    const diffMs = endTime - startTime;
+
+    if (diffMs < 60000) return "< 1m";
+    const diffHrs = Math.floor(diffMs / 3600000);
+    const diffMins = Math.floor((diffMs % 3600000) / 60000);
+    
+    return diffHrs > 0 ? `${diffHrs}h ${diffMins}m` : `${diffMins}m`;
+  };
+
   // --- ANALYTICAL CALCULATIONS ---
   const taskArray = Array.isArray(tasks) ? tasks : [];
   
@@ -95,13 +127,23 @@ export default function Dashboard() {
   const donePct = Math.round((doneTasks.length / totalCount) * 100);
   const overduePct = Math.round((overdueTasks.length / totalCount) * 100);
 
-  // --- NEW: TEAM WORKLOAD GROUPING LOGIC ---
+  // --- UPGRADED: TEAM WORKLOAD & PRESENCE LOGIC ---
   const teamWorkloads = Object.values(taskArray.reduce((acc, task) => {
-    // If the backend isn't populating the user name, it defaults to 'Unassigned' or the ID
-    const userName = task.assignedTo?.name || 'Unassigned Workspace';
+    const assignedUser = task.assignedTo;
+    const userName = assignedUser?.name || 'Unassigned Workspace';
     
     if (!acc[userName]) {
-      acc[userName] = { name: userName, total: 0, todo: 0, inProgress: 0, done: 0, overdue: 0 };
+      let isOnline = false;
+      // If they pinged within the last 2 minutes (120,000ms), they are online
+      if (assignedUser?.lastActive) {
+        isOnline = (new Date() - new Date(assignedUser.lastActive)) < 120000;
+      }
+      
+      acc[userName] = { 
+        name: userName, 
+        isOnline,
+        total: 0, todo: 0, inProgress: 0, done: 0, overdue: 0 
+      };
     }
     
     acc[userName].total += 1;
@@ -152,7 +194,6 @@ export default function Dashboard() {
             <>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2 mt-8">Admin Controls</p>
               
-              {/* NEW MONITORING TAB */}
               <button onClick={() => setActiveTab('team-monitor')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'team-monitor' ? 'bg-amber-600/10 text-amber-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
                 <IconUsers /> Team Monitor
               </button>
@@ -180,7 +221,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* MAIN VIEWPORT COMPARTMENT */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
         <header className="h-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 z-10">
           <div className="flex items-center gap-4">
@@ -243,7 +283,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 2: TEAM MONITOR (Admin Only) */}
+          {/* TAB 2: TEAM MONITOR WITH PRESENCE TRACKING */}
           {activeTab === 'team-monitor' && user.role === 'Admin' && (
              <div className="max-w-6xl mx-auto animation-fade-in">
               <div className="mb-8">
@@ -256,13 +296,25 @@ export default function Dashboard() {
                    <p className="text-slate-500 text-sm col-span-3">No active task data available to monitor.</p>
                 ) : (
                   teamWorkloads.map((member, index) => (
-                    <div key={index} className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-xl">
+                    <div key={index} className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden">
                       <div className="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4">
-                        <div className="w-10 h-10 rounded-full bg-amber-900/30 border border-amber-800 flex items-center justify-center text-amber-500 font-bold">
+                        <div className="w-10 h-10 rounded-full bg-amber-900/30 border border-amber-800 flex items-center justify-center text-amber-500 font-bold relative">
                           {member.name.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <h3 className="text-white font-bold">{member.name}</h3>
+                          <h3 className="text-white font-bold flex items-center gap-2">
+                            {member.name}
+                            {/* Online/Offline Status Indicator */}
+                            {member.name !== 'Unassigned Workspace' && (
+                              <span className="flex items-center gap-1 text-[9px] uppercase tracking-widest font-black">
+                                {member.isOnline ? (
+                                  <span className="text-emerald-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]"></span> Online</span>
+                                ) : (
+                                  <span className="text-slate-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600"></span> Offline</span>
+                                )}
+                              </span>
+                            )}
+                          </h3>
                           <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{member.total} Total Assigned</p>
                         </div>
                       </div>
@@ -295,7 +347,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 3: CREATE PROJECT (Admin Only) */}
+          {/* TAB 3: CREATE PROJECT */}
           {activeTab === 'init-project' && user.role === 'Admin' && (
             <div className="max-w-2xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
               <h2 className="text-2xl font-black text-white mb-2">Create Project</h2>
@@ -311,7 +363,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 4: ASSIGN TASKS (Admin Only) */}
+          {/* TAB 4: ASSIGN TASKS */}
           {activeTab === 'create-task' && user.role === 'Admin' && (
             <div className="max-w-3xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
               <h2 className="text-2xl font-black text-white mb-2">Create and Assign Tasks</h2>
@@ -349,7 +401,7 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* TAB 5: TASK MANAGEMENT */}
+          {/* TAB 5: TASK MANAGEMENT WITH TIME TRACKING */}
           {activeTab === 'task-management' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full pb-10">
               
@@ -384,6 +436,14 @@ export default function Dashboard() {
                       <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
                       <h4 className="font-bold text-white text-sm tracking-tight pl-2">{task.title}</h4>
                       <p className="text-xs text-slate-400 mt-2 pl-2 line-clamp-2">{task.description}</p>
+                      
+                      {/* Active Execution Timer */}
+                      {task.startedAt && (
+                        <p className="text-[10px] text-cyan-400 mt-3 font-semibold pl-2">
+                          ⏱️ Elapsed: {formatCycleTime(task.startedAt, null)}
+                        </p>
+                      )}
+
                       <div className="grid grid-cols-2 gap-2 mt-4 pl-2">
                         <button onClick={() => updateStatus(task._id, 'Todo')} className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">⬅️ To Do</button>
                         <button onClick={() => updateStatus(task._id, 'Done')} className="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition">Mark Done ✓</button>
@@ -402,6 +462,14 @@ export default function Dashboard() {
                   {doneTasks.map(task => (
                     <div key={task._id} className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 shadow-sm opacity-60">
                       <h4 className="font-bold text-slate-400 text-sm line-through tracking-tight">{task.title}</h4>
+                      
+                      {/* Completed Cycle Time */}
+                      {task.startedAt && task.completedAt && (
+                        <p className="text-[10px] text-emerald-400 mt-2 font-semibold">
+                          ⏱️ Duration: {formatCycleTime(task.startedAt, task.completedAt)}
+                        </p>
+                      )}
+
                       <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-4 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-1.5 rounded-lg w-full transition">🔄 Back to In Progress</button>
                     </div>
                   ))}

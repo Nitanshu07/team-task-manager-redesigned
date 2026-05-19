@@ -7,7 +7,12 @@ const TaskSchema = new mongoose.Schema({
   assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['Todo', 'In Progress', 'Done'], default: 'Todo' },
   priority: { type: String, enum: ['Low', 'Medium', 'High'], default: 'Medium' },
-  dueDate: { type: Date }
+  dueDate: { type: Date },
+  
+  // --- NEW: Time-Tracking Fields for Dashboard Analytics ---
+  startedAt: { type: Date },
+  completedAt: { type: Date }
+  
 }, { timestamps: true });
 
 module.exports = mongoose.model('Task', TaskSchema);
