@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken'); // ⚠️ CRITICAL: Ensure this import is present!
 
-// Ensure these paths match your file names exactly (watch the capital letters!)
 const Task = require('../models/Task');
-const UserTaskStatus = require('../models/UserTaskStatus');
+const UserTaskStatus = require('../models/UserTaskStatus'); // ⚠️ Must match filename case exactly!
 
-// GET ALL TASKS (Globally visible, individually tracked)
+// =========================================================================
+// 1. GET ALL TASKS (Globally visible, individually tracked)
+// =========================================================================
 router.get('/', async (req, res) => {
   try {
     const token = req.header('x-auth-token');
@@ -14,26 +15,17 @@ router.get('/', async (req, res) => {
       return res.status(401).json({ message: 'No token found, authorization denied.' });
     }
 
-    // Decode token to find who is logged in
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_change_this_later');
     const userId = decoded.id;
 
-    // 1. Fetch EVERY single task currently in the global pool
     const globalTasks = await Task.find().populate('project', 'name');
-
-    // 2. Fetch any personalized column status changes this specific user has made
     const personalStatuses = await UserTaskStatus.find({ user: userId });
 
-    // 3. Merge them: If the user hasn't touched a task, show it in 'Todo' instead of hiding it!
     const individualizedTasks = globalTasks.map(task => {
       const taskObject = task.toObject();
-      
-      // Look for a custom status row for this specific task and user
       const customStatusEntry = personalStatuses.find(s => s.task.toString() === task._id.toString());
       
-      // Fallback Assignment: If found, use it. Otherwise, default to 'Todo' so it's visible.
       taskObject.status = customStatusEntry ? customStatusEntry.status : 'Todo';
-      
       return taskObject;
     });
 
@@ -44,4 +36,40 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Keep your POST and PUT endpoints exactly the same as before...
+// =========================================================================
+// 2. CREATE GLOBAL TASK (Admin Only)
+// =========================================================================
+router.post('/', async (req, res) => {
+  try {
+    const { title, description, project, priority, dueDate } = req.body;
+    const newTask = new Task({ title, description, project, priority, dueDate });
+    await newTask.save();
+    return res.status(201).json(newTask);
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error creating global task' });
+  }
+});
+
+// =========================================================================
+// 3. UPDATE INDIVIDUAL STATUS ONLY
+// =========================================================================
+router.put('/:id', async (req, res) => {
+  try {
+    const token = req.header('x-auth-token');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_change_this_later');
+    const userId = decoded.id;
+    const { status } = req.body;
+
+    const updatedStatus = await UserTaskStatus.findOneAndUpdate(
+      { user: userId, task: req.params.id },
+      { status },
+      { new: true, upsert: true }
+    );
+
+    return res.status(200).json(updatedStatus);
+  } catch (err) {
+    return res.status(500).json({ message: 'Server error saving column placement' });
+  }
+});
+
+module.exports = router;
