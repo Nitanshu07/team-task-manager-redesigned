@@ -3,10 +3,10 @@ Here is the cleaned-up version of your project documentation with all the "New" 
 # ========================================================================
 PROJECT: TEAM TASK MANAGER
 
-Author: Tanishq Singh
+Author: Nitanshu Singh Chauhan
 Tech Stack: MERN (MongoDB, Express.js, React.js, Node.js), Tailwind CSS
-Live Deployment URL: [https://affectionate-recreation-production-4db2.up.railway.app](https://affectionate-recreation-production-4db2.up.railway.app)
-Backend Server URL: [https://team-task-manager-production-58d4.up.railway.app](https://team-task-manager-production-58d4.up.railway.app)
+Live Deployment URL: sincere-youthfulness-production-76f4.up.railway.app
+Backend Server URL: team-task-manager-redesigned-production.up.railway.app
 
 ---
 
@@ -68,9 +68,9 @@ A fully functional, role-based Team Task Management web application built using 
 ---
 
 Backend .env File Config:
-PORT=5000
-MONGO_URI=[Your Atlas Shard Connection URI]
+PORT=8080
+MONGO_URI=mongodb://nitanshu512:nikku0852@ac-ktsm0jd-shard-00-00.073tene.mongodb.net:27017,ac-ktsm0jd-shard-00-01.073tene.mongodb.net:27017,ac-ktsm0jd-shard-00-02.073tene.mongodb.net:27017/?ssl=true&replicaSet=atlas-n1snxe-shard-0&authSource=admin&appName=TaskFlowCluster
 JWT_SECRET=super_secret_key_change_this_later
 
 # Frontend .env File Config:
-VITE_API_URL=[https://team-task-manager-production-58d4.up.railway.app](https://team-task-manager-production-58d4.up.railway.app)
+VITE_API_URL=https://team-task-manager-redesigned-production.up.railway.app
