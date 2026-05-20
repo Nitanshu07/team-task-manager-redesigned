@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
       const taskObject = task.toObject();
       const customStatusEntry = personalStatuses.find(s => s.task.toString() === task._id.toString());
       
-      taskObject.status = customStatusEntry ? customStatusEntry.status : 'Todo';
+      taskObject.status = customStatusEntry ? customStatusEntry.status : taskObject.status;
       return taskObject;
     });
 
