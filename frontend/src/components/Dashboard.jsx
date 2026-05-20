@@ -117,12 +117,20 @@ export default function Dashboard() {
     ? rawTasks 
     : rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === loggedInUserId || t.assignedTo === loggedInUserId));
 
+  // --- UPDATED: Foolproof Case-Insensitive Filtering ---
   const activeBoardTasks = userVisibleTasks.filter(t => !t.isArchived);
   const archivedHistoryTasks = userVisibleTasks.filter(t => t.isArchived);
 
-  const todoTasks = activeBoardTasks.filter(t => t.status === 'Todo' || t.status === 'todo' || t.status === 'To Do');
-  const inProgressTasks = activeBoardTasks.filter(t => t.status === 'In Progress');
-  const doneTasks = activeBoardTasks.filter(t => t.status === 'Done'); 
+  const todoTasks = activeBoardTasks.filter(t => !t.status || t.status.toLowerCase().includes('todo'));
+  const inProgressTasks = activeBoardTasks.filter(t => t.status && t.status.toLowerCase() === 'in progress');
+  
+  // Catch-All: Anything that is not Todo or In Progress is forced here so you can delete it
+  const doneTasks = activeBoardTasks.filter(t => {
+    if (!t.status) return false;
+    const s = t.status.toLowerCase();
+    return !s.includes('todo') && s !== 'in progress';
+  }); 
+
   const overdueTasks = activeBoardTasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate) < new Date());
 
   const totalCount = activeBoardTasks.length || 1; 
@@ -456,19 +464,21 @@ export default function Dashboard() {
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
                   
                   {doneTasks.length > 0 ? (
-                    // This will ONLY show up if you have "Ghost Tasks" stuck from the old version
                     doneTasks.map(task => (
                       <div key={task._id} className="bg-red-950/30 p-4 rounded-xl border border-red-900/50 shadow-sm">
                         <p className="text-[10px] font-bold text-red-500 mb-2 uppercase tracking-widest">⚠️ Legacy Ghost Task</p>
                         <h4 className="font-bold text-slate-300 text-sm line-through tracking-tight">{task.title}</h4>
                         <div className="flex gap-2 mt-4">
                           <button onClick={() => updateStatus(task._id, 'In Progress')} className="flex-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">🔄 Revert</button>
-                          <button onClick={() => deleteTask(task._id)} className="flex-1 text-[10px] bg-red-900/40 hover:bg-red-600 text-red-400 hover:text-white font-bold py-2 rounded-lg transition border border-red-900/50 hover:border-transparent">🗑️ Delete</button>
+                          
+                          {/* Allow Admin to easily delete this stuck task */}
+                          {user.role === 'Admin' && (
+                            <button onClick={() => deleteTask(task._id)} className="flex-1 text-[10px] bg-red-900/40 hover:bg-red-600 text-red-400 hover:text-white font-bold py-2 rounded-lg transition border border-red-900/50 hover:border-transparent">🗑️ Delete</button>
+                          )}
                         </div>
                       </div>
                     ))
                   ) : (
-                    // Standard graphic when the active board is fully clean
                     <div className="border border-dashed border-emerald-900/30 rounded-xl p-8 flex flex-col items-center justify-center h-full opacity-60 text-center">
                         <span className="text-3xl mb-3">📁</span>
                         <p className="text-slate-400 text-xs font-semibold">Automated Storage</p>
