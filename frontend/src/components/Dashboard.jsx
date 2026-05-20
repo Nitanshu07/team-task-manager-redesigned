@@ -265,12 +265,16 @@ function DashTab({ myTasks, todo, inProg, done, overdue, isAdmin, totalTasks }) 
         <p style={{ color:'#5E5A7A',fontSize:14 }}>Your task metrics at a glance</p>
       </div>
 
-      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:14,marginBottom:22 }}>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:22 }}>
         {stats.map((s,i) => (
-          <div key={s.label} className={`stat-card ${s.cls}`} style={{ animationDelay:`${i*.06}s`,animation:'fadeUp .4s ease both' }}>
-            <div style={{ width:40,height:40,borderRadius:11,background:iconBg[s.cls],display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,marginBottom:12 }}>{s.icon}</div>
-            <div style={{ fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,color:'#1A1030',lineHeight:1 }}>{s.value}</div>
-            <div style={{ fontSize:11,fontWeight:600,color:'#9994B8',textTransform:'uppercase',letterSpacing:'.05em',marginTop:4 }}>{s.label}</div>
+          <div key={s.label} className={`stat-card ${s.cls}`} style={{ animationDelay:`${i*.06}s`,animation:'fadeUp .4s ease both',padding:'16px' }}>
+            <div style={{ display:'flex',alignItems:'center',gap:12 }}>
+              <div style={{ width:36,height:36,borderRadius:10,background:iconBg[s.cls],display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0 }}>{s.icon}</div>
+              <div>
+                <div style={{ fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,color:'#1A1030',lineHeight:1 }}>{s.value}</div>
+                <div style={{ fontSize:10,fontWeight:600,color:'#9994B8',textTransform:'uppercase',letterSpacing:'.05em',marginTop:3 }}>{s.label}</div>
+              </div>
+            </div>
           </div>
         ))}
       </div>
@@ -278,10 +282,10 @@ function DashTab({ myTasks, todo, inProg, done, overdue, isAdmin, totalTasks }) 
       <div className="card" style={{ marginBottom:20 }}>
         <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10 }}>
           <div>
-            <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,color:'#1A1030' }}>Overall Progress</div>
+            <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:'#1A1030' }}>Overall Progress</div>
             <div style={{ color:'#5E5A7A',fontSize:13,marginTop:2 }}>{done.length} of {myTasks.length} tasks completed</div>
           </div>
-          <div style={{ fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,background:'linear-gradient(135deg,#6C47FF,#00C9A7)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent' }}>{pct}%</div>
+          <div style={{ fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,background:'linear-gradient(135deg,#6C47FF,#00C9A7)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent' }}>{pct}%</div>
         </div>
         <div className="progress-bar">
           <div className="progress-fill" style={{ width:`${pct}%`,background:'linear-gradient(90deg,#6C47FF,#00C9A7)' }} />
