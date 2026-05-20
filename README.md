@@ -3,7 +3,7 @@ Here is the cleaned-up version of your project documentation with all the "New" 
 # ========================================================================
 PROJECT: TEAM TASK MANAGER
 
-Author: Tanishq Singh
+Author: Nitanshu Singh Chauhan
 Tech Stack: MERN (MongoDB, Express.js, React.js, Node.js), Tailwind CSS
 Live Deployment URL: [https://affectionate-recreation-production-4db2.up.railway.app](https://affectionate-recreation-production-4db2.up.railway.app)
 Backend Server URL: [https://team-task-manager-production-58d4.up.railway.app](https://team-task-manager-production-58d4.up.railway.app)
