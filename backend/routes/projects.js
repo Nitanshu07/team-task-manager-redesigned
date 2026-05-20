@@ -1,6 +1,9 @@
 const express = require('express');
-const router = express.Router();
-const Project = require('../models/Project'); // Double-check this matches your file name capitalization
+const router  = express.Router();
+const jwt     = require('jsonwebtoken');
+const Project = require('../models/Project');
+
+const SECRET = process.env.JWT_SECRET || 'super_secret_key_change_this_later';
 
 // 1. GET ALL PROJECTS
 router.get('/', async (req, res) => {
@@ -13,18 +16,20 @@ router.get('/', async (req, res) => {
   }
 });
 
-// 2. CREATE NEW PROJECT
+// 2. CREATE NEW PROJECT  — fix: extract admin from JWT so required field is satisfied
 router.post('/', async (req, res) => {
   try {
-    const { name } = req.body;
-    if (!name) {
-      return res.status(400).json({ message: 'Project name is required' });
-    }
+    const token = req.header('x-auth-token');
+    if (!token) return res.status(401).json({ message: 'No token, authorization denied.' });
 
-    const newProject = new Project({ name });
+    const decoded = jwt.verify(token, SECRET);
+    const { name, description } = req.body;
+
+    if (!name) return res.status(400).json({ message: 'Project name is required' });
+
+    const newProject = new Project({ name, description, admin: decoded.id });
     await newProject.save();
 
-    // MUST return a JSON status response so the frontend knows to unlock!
     return res.status(201).json(newProject);
   } catch (err) {
     console.error("Create Project Error:", err);

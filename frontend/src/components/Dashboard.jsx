@@ -149,8 +149,8 @@ export default function Dashboard() {
     fetchData();
   };
 
-  const myTasks = isAdmin ? tasks : tasks.filter(t => t.assignedTo?._id === user.id || t.assignedTo === user.id);
-  const todo    = myTasks.filter(t => t.status === 'To Do');
+  const myTasks = isAdmin ? tasks : tasks.filter(t => String(t.assignedTo?._id) === String(user.id) || String(t.assignedTo) === String(user.id));
+  const todo    = myTasks.filter(t => t.status === 'Todo');
   const inProg  = myTasks.filter(t => t.status === 'In Progress');
   const done    = myTasks.filter(t => t.status === 'Done');
   const overdue = myTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done');
@@ -368,7 +368,7 @@ function KanbanTab({ todo, inProg, done, updateStatus }) {
 /* ── Team Monitor ───────────────────────── */
 function TeamTab({ users, tasks }) {
   function isOnline(u) { return u.lastActive && Date.now()-new Date(u.lastActive).getTime()<90_000; }
-  function uTasks(uid) { return tasks.filter(t=>t.assignedTo?._id===uid||t.assignedTo===uid); }
+  function uTasks(uid) { return tasks.filter(t=>String(t.assignedTo?._id)===String(uid)||String(t.assignedTo)===String(uid)); }
   const onlineCount = users.filter(isOnline).length;
 
   return (
@@ -390,7 +390,7 @@ function TeamTab({ users, tasks }) {
           const pct  = ut.length>0?Math.round((utD/ut.length)*100):0;
           const ol   = isOnline(u);
           const loads = [
-            { label:'To Do',       v:ut.filter(t=>t.status==='To Do').length,        bg:'#E0F2FE', c:'#0EA5E9' },
+            { label:'To Do',       v:ut.filter(t=>t.status==='Todo').length,        bg:'#E0F2FE', c:'#0EA5E9' },
             { label:'In Progress', v:ut.filter(t=>t.status==='In Progress').length,  bg:'#FFF8E1', c:'#B07900' },
             { label:'Done',        v:utD,                                             bg:'#E0FAF5', c:'#007E69' },
             { label:'Overdue',     v:ut.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date()&&t.status!=='Done').length, bg:'#FFF0ED', c:'#FF5F40' },
