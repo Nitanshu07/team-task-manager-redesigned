@@ -338,7 +338,6 @@ export default function Dashboard() {
                             <td className="p-4 flex gap-2 justify-end">
                               <button onClick={() => updateStatus(task._id, 'In Progress')} className="px-3 py-2 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition" title="Restore to active board">🔄 Revert</button>
                               
-                              {/* SECURITY: Only Admins can permanently delete archived tasks */}
                               {user.role === 'Admin' && (
                                 <button onClick={() => deleteTask(task._id)} className="px-3 py-2 text-[10px] bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white font-bold rounded-lg transition" title="Permanently Delete">🗑️ Delete</button>
                               )}
@@ -451,14 +450,32 @@ export default function Dashboard() {
                 </div>
               </div>
 
+              {/* ✅ DONE COLUMN (With Legacy Ghost Task Catcher) */}
               <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
                 <h2 className="font-bold text-xs uppercase tracking-widest text-emerald-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800"><span>✅ Done</span></h2>
                 <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                  <div className="border border-dashed border-emerald-900/30 rounded-xl p-8 flex flex-col items-center justify-center h-full opacity-60 text-center">
-                      <span className="text-3xl mb-3">📁</span>
-                      <p className="text-slate-400 text-xs font-semibold">Automated Storage</p>
-                      <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">When you mark a task as Done, it is instantly routed to your Completed Log to keep this board clean.</p>
-                  </div>
+                  
+                  {doneTasks.length > 0 ? (
+                    // This will ONLY show up if you have "Ghost Tasks" stuck from the old version
+                    doneTasks.map(task => (
+                      <div key={task._id} className="bg-red-950/30 p-4 rounded-xl border border-red-900/50 shadow-sm">
+                        <p className="text-[10px] font-bold text-red-500 mb-2 uppercase tracking-widest">⚠️ Legacy Ghost Task</p>
+                        <h4 className="font-bold text-slate-300 text-sm line-through tracking-tight">{task.title}</h4>
+                        <div className="flex gap-2 mt-4">
+                          <button onClick={() => updateStatus(task._id, 'In Progress')} className="flex-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">🔄 Revert</button>
+                          <button onClick={() => deleteTask(task._id)} className="flex-1 text-[10px] bg-red-900/40 hover:bg-red-600 text-red-400 hover:text-white font-bold py-2 rounded-lg transition border border-red-900/50 hover:border-transparent">🗑️ Delete</button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    // Standard graphic when the active board is fully clean
+                    <div className="border border-dashed border-emerald-900/30 rounded-xl p-8 flex flex-col items-center justify-center h-full opacity-60 text-center">
+                        <span className="text-3xl mb-3">📁</span>
+                        <p className="text-slate-400 text-xs font-semibold">Automated Storage</p>
+                        <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">When you mark a task as Done, it is instantly routed to your Completed Log to keep this board clean.</p>
+                    </div>
+                  )}
+
                 </div>
               </div>
             </div>
