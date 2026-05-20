@@ -1,496 +1,552 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
+
+function authHeaders(token) {
+  return { 'Content-Type': 'application/json', 'x-auth-token': token };
+}
+
+function formatDuration(ms) {
+  if (!ms || ms <= 0) return null;
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function getTaskDuration(task) {
+  if (task.completedAt && task.startedAt)
+    return formatDuration(new Date(task.completedAt) - new Date(task.startedAt));
+  if (task.startedAt && task.status === 'In Progress')
+    return formatDuration(Date.now() - new Date(task.startedAt));
+  return null;
+}
+
+function avatarColor(name = '') {
+  const colors = ['#6C47FF','#FF5F40','#00C9A7','#FFAB00','#0EA5E9','#EC4899','#8B5CF6'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % colors.length;
+  return colors[h];
+}
+
+function Avatar({ name, size = 38 }) {
+  return (
+    <div style={{ width:size, height:size, borderRadius:'50%', background:avatarColor(name), color:'#fff',
+      display:'flex', alignItems:'center', justifyContent:'center',
+      fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:size*0.38, flexShrink:0 }}>
+      {name?.charAt(0)?.toUpperCase() || '?'}
+    </div>
+  );
+}
+
+const GLOBAL_STYLES = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:#F8F7FF;color:#1A1030}
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:#F3F0FF;border-radius:9999px}
+  ::-webkit-scrollbar-thumb{background:#E4DFFF;border-radius:9999px}
+  ::-webkit-scrollbar-thumb:hover{background:#6C47FF}
+  .nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .18s;color:#5E5A7A;font-weight:500;font-size:14px;white-space:nowrap;overflow:hidden;border:1.5px solid transparent;margin-bottom:2px;text-decoration:none}
+  .nav-item:hover{background:#F3F0FF;color:#1A1030}
+  .nav-item.active{background:#EDE9FF;color:#6C47FF;border-color:rgba(108,71,255,.2)}
+  .card{background:#fff;border:1.5px solid #E4DFFF;border-radius:14px;padding:20px;box-shadow:0 1px 3px rgba(108,71,255,.08)}
+  .input{width:100%;background:#fff;border:1.5px solid #E4DFFF;border-radius:8px;padding:11px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:#1A1030;outline:none;transition:border-color .18s,box-shadow .18s}
+  .input:focus{border-color:#6C47FF;box-shadow:0 0 0 3px rgba(108,71,255,.12)}
+  .input::placeholder{color:#9994B8}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;border:none;border-radius:8px;cursor:pointer;padding:10px 20px;transition:all .18s;white-space:nowrap}
+  .btn:disabled{opacity:.55;cursor:not-allowed}
+  .btn-primary{background:#6C47FF;color:#fff;box-shadow:0 4px 14px rgba(108,71,255,.35)}
+  .btn-primary:hover:not(:disabled){background:#4A28D4;transform:translateY(-1px)}
+  .btn-coral{background:#FF5F40;color:#fff;box-shadow:0 4px 14px rgba(255,95,64,.3)}
+  .btn-coral:hover:not(:disabled){background:#E84A2C;transform:translateY(-1px)}
+  .btn-teal{background:#00C9A7;color:#fff;box-shadow:0 4px 14px rgba(0,201,167,.3)}
+  .btn-teal:hover:not(:disabled){background:#00A88B;transform:translateY(-1px)}
+  .btn-ghost{background:transparent;color:#5E5A7A;border:1.5px solid #E4DFFF}
+  .btn-ghost:hover{background:#F3F0FF;color:#1A1030}
+  .badge{font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;text-transform:uppercase;letter-spacing:.04em}
+  .badge-high{background:#FFF0ED;color:#FF5F40}
+  .badge-medium{background:#FFF8E1;color:#B07900}
+  .badge-low{background:#E0FAF5;color:#007E69}
+  .badge-project{background:#EDE9FF;color:#6C47FF}
+  .badge-user{background:#F3F0FF;color:#5E5A7A}
+  .task-card{background:#fff;border:1.5px solid #E4DFFF;border-radius:8px;padding:14px;margin-bottom:10px;transition:all .18s;position:relative;overflow:hidden}
+  .task-card:hover{border-color:#6C47FF;box-shadow:0 4px 16px rgba(108,71,255,.12);transform:translateY(-1px)}
+  .task-card-h::before,.task-card-m::before,.task-card-l::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:3px 0 0 3px}
+  .task-card-h::before{background:#FF5F40}
+  .task-card-m::before{background:#FFAB00}
+  .task-card-l::before{background:#00C9A7}
+  .stat-card{background:#fff;border:1.5px solid #E4DFFF;border-radius:14px;padding:20px;position:relative;overflow:hidden}
+  .stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+  .sc-violet::before{background:linear-gradient(90deg,#6C47FF,#A78BFF)}
+  .sc-coral::before{background:linear-gradient(90deg,#FF5F40,#FF9A7D)}
+  .sc-teal::before{background:linear-gradient(90deg,#00C9A7,#6EF0DC)}
+  .sc-amber::before{background:linear-gradient(90deg,#FFAB00,#FFD07A)}
+  .sc-sky::before{background:linear-gradient(90deg,#0EA5E9,#7DD3FC)}
+  .progress-bar{height:6px;background:#F3F0FF;border-radius:999px;overflow:hidden}
+  .progress-fill{height:100%;border-radius:999px;transition:width .5s ease}
+  .alert-error{padding:12px 16px;background:#FFF0ED;color:#FF5F40;border:1px solid rgba(255,95,64,.2);border-radius:8px;font-size:13px;font-weight:500;margin-bottom:16px}
+  .alert-success{padding:12px 16px;background:#E0FAF5;color:#007E69;border:1px solid rgba(0,201,167,.2);border-radius:8px;font-size:13px;font-weight:500;margin-bottom:16px}
+  .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:white;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+  .fade-up{animation:fadeUp .35s ease both}
+  .label{display:block;font-size:13px;font-weight:600;color:#5E5A7A;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em}
+  .field{margin-bottom:16px}
+  .presence-online{color:#22C55E;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px}
+  .presence-offline{color:#9994B8;font-size:11px;font-weight:600}
+`;
+
 export default function Dashboard() {
-  const [tasks, setTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [usersList, setUsersList] = useState([]); 
-  
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard'); 
-  
-  const [newProjectName, setNewProjectName] = useState('');
-  const [taskForm, setTaskForm] = useState({ title: '', description: '', priority: 'Medium', dueDate: '', assignedTo: '' });
-  
-  const navigate = useNavigate();
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
+  const navigate  = useNavigate();
+  const token     = localStorage.getItem('token');
+  const user      = JSON.parse(localStorage.getItem('user') || '{}');
+  const isAdmin   = user.role === 'admin' || user.role === 'Admin';
+
+  const [tab,       setTab]       = useState('dashboard');
+  const [collapsed, setCollapsed] = useState(false);
+  const [tasks,     setTasks]     = useState([]);
+  const [users,     setUsers]     = useState([]);
+  const [projects,  setProjects]  = useState([]);
+  const [loading,   setLoading]   = useState(true);
+
+  const fetchData = useCallback(async () => {
+    if (!token) { navigate('/'); return; }
+    try {
+      const headers = { 'x-auth-token': token };
+      const [tRes, pRes, uRes] = await Promise.all([
+        fetch(`${BACKEND_URL}/api/tasks`,      { headers }),
+        fetch(`${BACKEND_URL}/api/projects`,   { headers }),
+        fetch(`${BACKEND_URL}/api/auth/users`, { headers }),
+      ]);
+      if (tRes.status === 401) { localStorage.clear(); navigate('/'); return; }
+      const [t, p, u] = await Promise.all([tRes.json(), pRes.json(), uRes.json()]);
+      setTasks(Array.isArray(t) ? t : []);
+      setProjects(Array.isArray(p) ? p : []);
+      setUsers(Array.isArray(u) ? u : []);
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  }, [token, navigate]);
 
   useEffect(() => {
-    if (!token) { navigate('/'); return; }
     fetchData();
-    pingServer();
-    const pingInterval = setInterval(() => { pingServer(); }, 60000);
-    return () => clearInterval(pingInterval);
-  }, [navigate, token]);
-
-  const pingServer = () => {
-    fetch(`${BACKEND_URL}/api/auth/ping`, { method: 'POST', headers: { 'x-auth-token': token } }).catch(err => console.log("Ping skipped"));
-  };
+    const ping = () => fetch(`${BACKEND_URL}/api/auth/ping`, { method:'POST', headers:{ 'x-auth-token': token } }).catch(()=>{});
+    ping();
+    const id = setInterval(ping, 60_000);
+    return () => clearInterval(id);
+  }, [fetchData, token]);
 
   const handleLogout = async () => {
-    try {
-      await fetch(`${BACKEND_URL}/api/auth/logout`, {
-        method: 'POST',
-        headers: { 'x-auth-token': token }
-      });
-    } catch (e) {
-      console.error("Logout ping failed", e);
-    }
+    try { await fetch(`${BACKEND_URL}/api/auth/logout`, { method:'POST', headers:{ 'x-auth-token': token } }); } catch {}
     localStorage.clear();
     navigate('/');
   };
 
-  const fetchData = async () => {
-    try {
-      const headers = { 'x-auth-token': token };
-      const [tasksRes, projsRes, usersRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/api/tasks`, { headers }),
-        fetch(`${BACKEND_URL}/api/projects`, { headers }),
-        fetch(`${BACKEND_URL}/api/auth/users`, { headers })
-      ]);
-      setTasks(await tasksRes.json());
-      setProjects(await projsRes.json());
-      if (usersRes.ok) setUsersList(await usersRes.json());
-    } catch (err) { console.error("Error pulling database profiles", err); }
-  };
-
-  const handleCreateProject = async (e) => {
-    e.preventDefault();
-    await fetch(`${BACKEND_URL}/api/projects`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-auth-token': token },
-      body: JSON.stringify({ name: newProjectName, admin: user.id || user._id })
-    });
-    setNewProjectName('');
-    alert("Project Created Successfully!");
-    fetchData();
-    setActiveTab('create-task'); 
-  };
-
-  const handleCreateTask = async (e) => {
-    e.preventDefault();
-    if (!projects || !projects.length) return alert("Please create a project first.");
-    const payload = { title: taskForm.title, description: taskForm.description, priority: taskForm.priority, dueDate: taskForm.dueDate, project: projects[0]._id };
-    if (taskForm.assignedTo) payload.assignedTo = taskForm.assignedTo;
-
-    await fetch(`${BACKEND_URL}/api/tasks`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify(payload)
-    });
-    setTaskForm({ title: '', description: '', priority: 'Medium', dueDate: '', assignedTo: '' });
-    alert("Task Assigned Successfully!");
-    fetchData();
-  };
-
-  const updateStatus = async (taskId, newStatus) => {
+  const updateTaskStatus = async (taskId, status) => {
     await fetch(`${BACKEND_URL}/api/tasks/${taskId}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ status: newStatus })
+      method:'PUT', headers: authHeaders(token), body: JSON.stringify({ status }),
     });
     fetchData();
   };
 
-  const deleteTask = async (taskId) => {
-    const confirmDelete = window.confirm("Are you sure you want to permanently remove this task from history?");
-    if (!confirmDelete) return;
-    try {
-      await fetch(`${BACKEND_URL}/api/tasks/${taskId}`, { method: 'DELETE', headers: { 'x-auth-token': token } });
-      fetchData(); 
-    } catch (err) { alert("Error deleting task."); }
-  };
+  const myTasks = isAdmin ? tasks : tasks.filter(t => t.assignedTo?._id === user.id || t.assignedTo === user.id);
+  const todo    = myTasks.filter(t => t.status === 'To Do');
+  const inProg  = myTasks.filter(t => t.status === 'In Progress');
+  const done    = myTasks.filter(t => t.status === 'Done');
+  const overdue = myTasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done');
 
-  const formatCycleTime = (start, end) => {
-    if (!start) return null;
-    const startTime = new Date(start).getTime();
-    const endTime = end ? new Date(end).getTime() : new Date().getTime();
-    const diffMs = endTime - startTime;
-    if (diffMs < 60000) return "< 1m";
-    const diffHrs = Math.floor(diffMs / 3600000);
-    const diffMins = Math.floor((diffMs % 3600000) / 60000);
-    return diffHrs > 0 ? `${diffHrs}h ${diffMins}m` : `${diffMins}m`;
-  };
+  const navItems = [
+    { id:'dashboard', label:'Dashboard',    icon:'📊' },
+    { id:'tasks',     label:'Task Board',   icon:'✅' },
+    ...(isAdmin ? [
+      { id:'monitor', label:'Team Monitor', icon:'👥' },
+      { id:'project', label:'New Project',  icon:'📁' },
+      { id:'assign',  label:'Assign Task',  icon:'🎯' },
+    ] : []),
+  ];
 
-  const loggedInUserId = user.id || user._id;
-  const rawTasks = Array.isArray(tasks) ? tasks : [];
-  
-  const userVisibleTasks = user.role === 'Admin' 
-    ? rawTasks 
-    : rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === loggedInUserId || t.assignedTo === loggedInUserId));
-
-  // --- UPDATED: Foolproof Case-Insensitive Filtering ---
-  const activeBoardTasks = userVisibleTasks.filter(t => !t.isArchived);
-  const archivedHistoryTasks = userVisibleTasks.filter(t => t.isArchived);
-
-  const todoTasks = activeBoardTasks.filter(t => !t.status || t.status.toLowerCase().includes('todo'));
-  const inProgressTasks = activeBoardTasks.filter(t => t.status && t.status.toLowerCase() === 'in progress');
-  
-  // Catch-All: Anything that is not Todo or In Progress is forced here so you can delete it
-  const doneTasks = activeBoardTasks.filter(t => {
-    if (!t.status) return false;
-    const s = t.status.toLowerCase();
-    return !s.includes('todo') && s !== 'in progress';
-  }); 
-
-  const overdueTasks = activeBoardTasks.filter(t => t.dueDate && t.status !== 'Done' && new Date(t.dueDate) < new Date());
-
-  const totalCount = activeBoardTasks.length || 1; 
-  const todoPct = Math.round((todoTasks.length / totalCount) * 100);
-  const progressPct = Math.round((inProgressTasks.length / totalCount) * 100);
-  const donePct = Math.round((doneTasks.length / totalCount) * 100);
-  const overduePct = Math.round((overdueTasks.length / totalCount) * 100);
-
-  const monitoredUsers = usersList.filter(u => u.role !== 'Admin' && u.role !== 'admin');
-
-  const teamWorkloads = monitoredUsers.map(dbUser => {
-    const assignedTasks = rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === dbUser._id || t.assignedTo === dbUser._id));
-    
-    let isOnline = false;
-    if (dbUser.lastActive) isOnline = (new Date() - new Date(dbUser.lastActive)) < 120000;
-    
-    let todo = 0, inProgress = 0, done = 0, overdue = 0;
-    
-    assignedTasks.forEach(t => {
-      const status = t.status?.toLowerCase() || 'todo';
-      
-      if (t.isArchived || status === 'done') {
-        done++;
-      } else if (status === 'in progress') {
-        inProgress++;
-      } else {
-        todo++;
-      }
-      
-      if (t.dueDate && new Date(t.dueDate) < new Date() && !t.isArchived && status !== 'done') {
-        overdue++;
-      }
-    });
-
-    return { name: dbUser.name, role: dbUser.role, isOnline, total: assignedTasks.length, todo, inProgress, done, overdue };
-  });
-
-  const IconMenu = () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>;
-  const IconDash = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>;
-  const IconFolder = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>;
-  const IconPlus = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>;
-  const IconBoard = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>;
-  const IconUsers = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>;
-  const IconArchive = () => <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path></svg>;
-  const IconLogout = () => <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>;
+  if (loading) return (
+    <div style={{ minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:'#F8F7FF',gap:16 }}>
+      <style>{GLOBAL_STYLES}</style>
+      <div style={{ width:52,height:52,borderRadius:14,background:'linear-gradient(135deg,#6C47FF,#FF5F40)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:26 }}>T</div>
+      <div style={{ width:32,height:32,border:'3px solid #E4DFFF',borderTopColor:'#6C47FF',borderRadius:'50%',animation:'spin .7s linear infinite' }} />
+      <div style={{ fontSize:14,color:'#5E5A7A' }}>Loading your workspace…</div>
+    </div>
+  );
 
   return (
-    <div className="flex h-screen bg-slate-950 text-slate-100 font-sans antialiased overflow-hidden">
-      
-      {/* SIDEBAR NAVIGATION */}
-      <div className={`bg-slate-900 border-r border-slate-800 transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-64' : 'w-0 overflow-hidden'}`}>
-        <div className="p-6 border-b border-slate-800 flex flex-col h-20 justify-center min-w-[16rem]">
-          <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-            <span className="bg-indigo-600 w-2.5 h-5 rounded-sm inline-block"></span> Team Tasks
-          </h2>
+    <div style={{ display:'flex',minHeight:'100vh',background:'#F8F7FF',fontFamily:"'DM Sans',sans-serif" }}>
+      <style>{GLOBAL_STYLES}</style>
+
+      {/* Sidebar */}
+      <aside style={{ width:collapsed?68:256,minHeight:'100vh',background:'#fff',borderRight:'1.5px solid #E4DFFF',display:'flex',flexDirection:'column',padding:'20px '+(collapsed?'10px':'14px'),transition:'width .3s ease',position:'sticky',top:0,height:'100vh',overflowY:'auto',flexShrink:0 }}>
+        <div style={{ display:'flex',alignItems:'center',gap:10,paddingBottom:20,borderBottom:'1.5px solid #E4DFFF',marginBottom:16,overflow:'hidden' }}>
+          <div style={{ width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#6C47FF,#FF5F40)',display:'flex',alignItems:'center',justifyContent:'center',color:'white',fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,flexShrink:0 }}>T</div>
+          {!collapsed && <span style={{ fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:'#1A1030',whiteSpace:'nowrap' }}>TaskFlow</span>}
         </div>
-        
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto min-w-[16rem]">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2 mt-2">Views</p>
-          <button onClick={() => setActiveTab('dashboard')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'dashboard' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-            <IconDash /> Dashboard
-          </button>
-          
-          <button onClick={() => setActiveTab('task-management')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'task-management' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-            <IconBoard /> Task Management
-          </button>
 
-          <button onClick={() => setActiveTab('task-history')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'task-history' ? 'bg-indigo-600/10 text-indigo-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-            <IconArchive /> Completed Log
-          </button>
-
-          {user.role === 'Admin' && (
-            <>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-2 mt-8">Admin Controls</p>
-              <button onClick={() => setActiveTab('team-monitor')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'team-monitor' ? 'bg-amber-600/10 text-amber-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                <IconUsers /> Team Monitor
-              </button>
-              <button onClick={() => setActiveTab('init-project')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'init-project' ? 'bg-emerald-600/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                <IconFolder /> Create Project
-              </button>
-              <button onClick={() => setActiveTab('create-task')} className={`w-full flex items-center p-3 rounded-xl text-sm font-semibold transition ${activeTab === 'create-task' ? 'bg-emerald-600/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>
-                <IconPlus /> Assign Tasks
-              </button>
-            </>
-          )}
+        <nav style={{ flex:1 }}>
+          {navItems.map(n => (
+            <div key={n.id} className={`nav-item${tab===n.id?' active':''}`} onClick={()=>setTab(n.id)} title={collapsed?n.label:undefined}>
+              <span style={{ fontSize:16,flexShrink:0 }}>{n.icon}</span>
+              {!collapsed && <span style={{ overflow:'hidden',whiteSpace:'nowrap' }}>{n.label}</span>}
+            </div>
+          ))}
         </nav>
-        
-        <div className="p-4 border-t border-slate-800 min-w-[16rem]">
-          <div className="flex items-center gap-3 p-2">
-            <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-indigo-400 border border-slate-700">
-              {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+
+        <div style={{ borderTop:'1.5px solid #E4DFFF',paddingTop:12,marginTop:8 }}>
+          {!collapsed && (
+            <div style={{ display:'flex',alignItems:'center',gap:8,padding:'0 8px 10px' }}>
+              <div style={{ position:'relative',flexShrink:0 }}>
+                <Avatar name={user.name} size={32} />
+                <span style={{ width:8,height:8,borderRadius:'50%',background:'#22C55E',border:'2px solid white',position:'absolute',bottom:0,right:0,boxShadow:'0 0 5px rgba(34,197,94,.6)',display:'block' }} />
+              </div>
+              <div style={{ overflow:'hidden' }}>
+                <div style={{ fontWeight:700,fontSize:13,color:'#1A1030',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis' }}>{user.name}</div>
+                <div style={{ fontSize:11,color:'#9994B8',textTransform:'capitalize' }}>{user.role}</div>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold text-white">{user.name}</p>
-              <p className="text-[10px] text-slate-500">{user.role}</p>
-            </div>
+          )}
+          <div className="nav-item" onClick={()=>setCollapsed(!collapsed)} title={collapsed?'Expand':'Collapse'} style={{ marginBottom:2 }}>
+            <span style={{ fontSize:12,flexShrink:0 }}>{collapsed?'▶':'◀'}</span>
+            {!collapsed && <span>Collapse</span>}
           </div>
+          <div className="nav-item" onClick={handleLogout} style={{ color:'#FF5F40' }}>
+            <span style={{ fontSize:16,flexShrink:0 }}>🚪</span>
+            {!collapsed && <span>Sign Out</span>}
+          </div>
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div style={{ flex:1,display:'flex',flexDirection:'column',minWidth:0 }}>
+        {/* Topbar */}
+        <div style={{ background:'#fff',borderBottom:'1.5px solid #E4DFFF',padding:'12px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:20 }}>
+          <h1 style={{ fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,color:'#1A1030' }}>
+            {navItems.find(n=>n.id===tab)?.icon} {navItems.find(n=>n.id===tab)?.label}
+          </h1>
+          <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+            <span style={{ fontSize:13,color:'#5E5A7A',background:'#F3F0FF',padding:'5px 12px',borderRadius:999,border:'1.5px solid #E4DFFF' }}>👋 {user.name}</span>
+            <span style={{ display:'flex',alignItems:'center',gap:5,fontSize:12,color:'#16A34A',fontWeight:600,background:'#F0FDF4',padding:'5px 10px',borderRadius:999,border:'1.5px solid #BBF7D0' }}>
+              <span style={{ width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px rgba(34,197,94,.6)',display:'inline-block' }} />Online
+            </span>
+          </div>
+        </div>
+
+        {/* Content */}
+        <main style={{ flex:1,padding:'28px 28px',overflowY:'auto' }}>
+          {tab === 'dashboard' && <DashTab myTasks={myTasks} todo={todo} inProg={inProg} done={done} overdue={overdue} isAdmin={isAdmin} totalTasks={tasks.length} />}
+          {tab === 'tasks'     && <KanbanTab todo={todo} inProg={inProg} done={done} updateStatus={updateTaskStatus} />}
+          {tab === 'monitor'   && isAdmin && <TeamTab users={users} tasks={tasks} />}
+          {tab === 'project'   && isAdmin && <ProjectTab token={token} onSuccess={fetchData} />}
+          {tab === 'assign'    && isAdmin && <AssignTab users={users} projects={projects} token={token} onSuccess={fetchData} />}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+/* ── Dashboard Overview ─────────────────── */
+function DashTab({ myTasks, todo, inProg, done, overdue, isAdmin, totalTasks }) {
+  const pct = myTasks.length > 0 ? Math.round((done.length / myTasks.length) * 100) : 0;
+  const stats = [
+    { label:'To Do',       value:todo.length,   cls:'sc-sky',    icon:'📋' },
+    { label:'In Progress', value:inProg.length, cls:'sc-amber',  icon:'⚡' },
+    { label:'Completed',   value:done.length,   cls:'sc-teal',   icon:'✅' },
+    { label:'Overdue',     value:overdue.length,cls:'sc-coral',  icon:'⚠️' },
+    ...(isAdmin ? [{ label:'Total Tasks', value:totalTasks, cls:'sc-violet', icon:'📊' }] : []),
+  ];
+  const iconBg = { 'sc-sky':'#E0F2FE','sc-amber':'#FFF8E1','sc-teal':'#E0FAF5','sc-coral':'#FFF0ED','sc-violet':'#EDE9FF' };
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:24 }}>
+        <h2 style={{ fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:800,color:'#1A1030',marginBottom:4 }}>Overview</h2>
+        <p style={{ color:'#5E5A7A',fontSize:14 }}>Your task metrics at a glance</p>
+      </div>
+
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:14,marginBottom:22 }}>
+        {stats.map((s,i) => (
+          <div key={s.label} className={`stat-card ${s.cls}`} style={{ animationDelay:`${i*.06}s`,animation:'fadeUp .4s ease both' }}>
+            <div style={{ width:40,height:40,borderRadius:11,background:iconBg[s.cls],display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,marginBottom:12 }}>{s.icon}</div>
+            <div style={{ fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,color:'#1A1030',lineHeight:1 }}>{s.value}</div>
+            <div style={{ fontSize:11,fontWeight:600,color:'#9994B8',textTransform:'uppercase',letterSpacing:'.05em',marginTop:4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ marginBottom:20 }}>
+        <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10 }}>
+          <div>
+            <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:15,color:'#1A1030' }}>Overall Progress</div>
+            <div style={{ color:'#5E5A7A',fontSize:13,marginTop:2 }}>{done.length} of {myTasks.length} tasks completed</div>
+          </div>
+          <div style={{ fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,background:'linear-gradient(135deg,#6C47FF,#00C9A7)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent' }}>{pct}%</div>
+        </div>
+        <div className="progress-bar">
+          <div className="progress-fill" style={{ width:`${pct}%`,background:'linear-gradient(90deg,#6C47FF,#00C9A7)' }} />
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col h-screen overflow-hidden relative">
-        <header className="h-20 bg-slate-950/80 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 z-10">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-slate-400 hover:text-white transition p-2 rounded-lg hover:bg-slate-800">
-              <IconMenu />
-            </button>
-            <h1 className="text-lg font-bold text-slate-200 capitalize">
-              {activeTab.replace('-', ' ')}
-            </h1>
+      {inProg.length > 0 && (
+        <div className="card">
+          <h3 style={{ fontFamily:"'Syne',sans-serif",fontSize:15,fontWeight:700,color:'#1A1030',marginBottom:14 }}>⚡ In Progress</h3>
+          <div style={{ display:'flex',flexDirection:'column',gap:8 }}>
+            {inProg.slice(0,5).map(t => (
+              <div key={t._id} style={{ display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'#F3F0FF',borderRadius:8,border:'1.5px solid #E4DFFF' }}>
+                <div style={{ width:7,height:7,borderRadius:'50%',flexShrink:0,background:t.priority==='High'?'#FF5F40':t.priority==='Low'?'#00C9A7':'#FFAB00' }} />
+                <div style={{ flex:1,overflow:'hidden' }}>
+                  <div style={{ fontWeight:600,fontSize:13,color:'#1A1030',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis' }}>{t.title}</div>
+                  {t.assignedTo?.name && <div style={{ fontSize:11,color:'#9994B8' }}>👤 {t.assignedTo.name}</div>}
+                </div>
+                {getTaskDuration(t) && <span style={{ fontSize:11,color:'#FFAB00',fontWeight:600,flexShrink:0 }}>⏱️ {getTaskDuration(t)}</span>}
+              </div>
+            ))}
           </div>
-          <button onClick={handleLogout} className="flex items-center bg-slate-900 hover:bg-red-950/40 text-slate-300 hover:text-red-400 font-semibold px-4 py-2 rounded-xl transition border border-slate-800 hover:border-red-900/60 text-xs">
-            <IconLogout /> Log Out
-          </button>
-        </header>
+        </div>
+      )}
+    </div>
+  );
+}
 
-        <main className="flex-1 overflow-y-auto p-8 bg-slate-950 relative">
-          
-          {/* TAB 1: DASHBOARD */}
-          {activeTab === 'dashboard' && (
-            <div className="max-w-6xl mx-auto animation-fade-in">
-              <div className="mb-8">
-                <h2 className="text-2xl font-black text-white mb-2">Dashboard</h2>
-                <p className="text-slate-400 text-sm">
-                  {user.role === 'Admin' ? 'Overview of all active global tasks.' : 'Overview of your active assigned tasks.'}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
-                  <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Tasks (To Do)</span>
-                    <span className="text-3xl font-black text-white">{todoTasks.length}</span>
-                  </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-indigo-500 h-1.5 rounded-full" style={{ width: `${todoPct}%` }}></div></div>
-                </div>
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
-                  <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-cyan-500 uppercase tracking-widest">In Progress</span>
-                    <span className="text-3xl font-black text-cyan-400">{inProgressTasks.length}</span>
-                  </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-cyan-500 h-1.5 rounded-full" style={{ width: `${progressPct}%` }}></div></div>
-                </div>
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-lg">
-                  <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Done</span>
-                    <span className="text-3xl font-black text-emerald-400">{doneTasks.length}</span>
-                  </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${donePct}%` }}></div></div>
-                </div>
-                <div className="bg-slate-900 p-6 rounded-2xl border border-red-900/30 bg-red-950/10 shadow-lg">
-                  <div className="flex justify-between items-end mb-4">
-                    <span className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Overdue</span>
-                    <span className="text-3xl font-black text-red-400">{overdueTasks.length}</span>
-                  </div>
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 mb-1"><div className="bg-red-500 h-1.5 rounded-full" style={{ width: `${overduePct}%` }}></div></div>
-                </div>
-              </div>
+/* ── Kanban Board ───────────────────────── */
+function KanbanTab({ todo, inProg, done, updateStatus }) {
+  const cols = [
+    { label:'To Do',       color:'#0EA5E9', tasks:todo,  next:'In Progress', btnLabel:'Start →',    btnCls:'btn-teal' },
+    { label:'In Progress', color:'#FFAB00', tasks:inProg,next:'Done',         btnLabel:'Mark Done',  btnCls:'btn-primary' },
+    { label:'Done',        color:'#00C9A7', tasks:done,  next:null },
+  ];
+
+  return (
+    <div className="fade-up">
+      <div style={{ marginBottom:22 }}>
+        <h2 style={{ fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:800,color:'#1A1030',marginBottom:4 }}>Task Board</h2>
+        <p style={{ color:'#5E5A7A',fontSize:14 }}>Move tasks through your workflow</p>
+      </div>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16 }}>
+        {cols.map(col => (
+          <div key={col.label} style={{ background:'#fff',border:'1.5px solid #E4DFFF',borderRadius:14,padding:14,minHeight:400 }}>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14 }}>
+              <span style={{ display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em',color:col.color }}>
+                <span style={{ width:7,height:7,borderRadius:'50%',background:col.color,display:'inline-block' }} />{col.label}
+              </span>
+              <span style={{ fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:999,background:'#F3F0FF',color:'#5E5A7A' }}>{col.tasks.length}</span>
             </div>
-          )}
-
-          {/* TAB: COMPLETED LOG WITH ASSIGNED USER DATA */}
-          {activeTab === 'task-history' && (
-            <div className="max-w-6xl mx-auto animation-fade-in">
-              <div className="mb-8 flex justify-between items-end">
-                <div>
-                  <h2 className="text-2xl font-black text-white mb-2">Completed Task Log</h2>
-                  <p className="text-slate-400 text-sm">A permanent record of all securely archived tasks.</p>
+            {col.tasks.length === 0 && (
+              <div style={{ textAlign:'center',padding:'36px 16px',color:'#9994B8',fontSize:13,border:'2px dashed #E4DFFF',borderRadius:10 }}>No tasks here</div>
+            )}
+            {col.tasks.map(task => (
+              <div key={task._id} className={`task-card task-card-${(task.priority||'m').charAt(0).toLowerCase()}`}>
+                <div style={{ fontWeight:600,fontSize:13,color:'#1A1030',marginBottom:6 }}>{task.title}</div>
+                {task.description && <div style={{ fontSize:12,color:'#5E5A7A',marginBottom:7,lineHeight:1.5 }}>{task.description}</div>}
+                <div style={{ display:'flex',flexWrap:'wrap',gap:5 }}>
+                  <span className={`badge badge-${(task.priority||'medium').toLowerCase()}`}>{task.priority||'Medium'}</span>
+                  {task.project?.name && <span className="badge badge-project">{task.project.name}</span>}
+                  {task.assignedTo?.name && <span className="badge badge-user">👤 {task.assignedTo.name}</span>}
                 </div>
-                <div className="text-right">
-                  <p className="text-3xl font-black text-emerald-400">{archivedHistoryTasks.length}</p>
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total Completed</p>
-                </div>
-              </div>
-
-              <div className="bg-slate-900/50 rounded-3xl border border-slate-800 shadow-xl overflow-hidden">
-                {archivedHistoryTasks.length === 0 ? (
-                  <div className="p-8 text-center text-slate-500">No tasks have been completed yet.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-400">
-                          <th className="p-4 font-bold">Task Title</th>
-                          <th className="p-4 font-bold">Assigned To</th>
-                          <th className="p-4 font-bold">Priority</th>
-                          <th className="p-4 font-bold">Time Taken</th>
-                          <th className="p-4 font-bold">Completed On</th>
-                          <th className="p-4 font-bold text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/50">
-                        {archivedHistoryTasks.map(task => (
-                          <tr key={task._id} className="hover:bg-slate-800/30 transition">
-                            <td className="p-4">
-                              <p className="text-sm font-bold text-slate-200">{task.title}</p>
-                              <p className="text-xs text-slate-500 truncate max-w-xs">{task.description}</p>
-                            </td>
-                            <td className="p-4">
-                              <p className="text-xs font-bold text-indigo-300 bg-indigo-900/20 inline-block px-2 py-1 rounded-md border border-indigo-900/50">
-                                {task.assignedTo?.name || 'Unassigned'}
-                              </p>
-                            </td>
-                            <td className="p-4">
-                              <span className={`text-[10px] font-bold px-2 py-1 rounded-lg ${task.priority === 'High' ? 'bg-red-900/30 text-red-400' : task.priority === 'Medium' ? 'bg-amber-900/30 text-amber-400' : 'bg-slate-800 text-slate-300'}`}>
-                                {task.priority}
-                              </span>
-                            </td>
-                            <td className="p-4 text-xs font-semibold text-cyan-400">
-                              {task.startedAt && task.completedAt ? formatCycleTime(task.startedAt, task.completedAt) : 'N/A'}
-                            </td>
-                            <td className="p-4 text-xs text-slate-400">
-                              {task.completedAt ? new Date(task.completedAt).toLocaleDateString() : 'N/A'}
-                            </td>
-                            <td className="p-4 flex gap-2 justify-end">
-                              <button onClick={() => updateStatus(task._id, 'In Progress')} className="px-3 py-2 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition" title="Restore to active board">🔄 Revert</button>
-                              
-                              {user.role === 'Admin' && (
-                                <button onClick={() => deleteTask(task._id)} className="px-3 py-2 text-[10px] bg-red-900/20 hover:bg-red-600 text-red-500 hover:text-white font-bold rounded-lg transition" title="Permanently Delete">🗑️ Delete</button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                {getTaskDuration(task) && <div style={{ fontSize:11,color:'#9994B8',marginTop:6,display:'flex',alignItems:'center',gap:4 }}>⏱️ {getTaskDuration(task)}</div>}
+                {task.dueDate && (
+                  <div style={{ fontSize:11,color:new Date(task.dueDate)<new Date()&&task.status!=='Done'?'#FF5F40':'#9994B8',marginTop:5 }}>
+                    📅 {new Date(task.dueDate).toLocaleDateString()}
                   </div>
                 )}
+                {col.next && (
+                  <button className={`btn ${col.btnCls}`} style={{ marginTop:10,width:'100%',fontSize:12,padding:'7px 10px' }}
+                    onClick={()=>updateStatus(task._id, col.next)}>
+                    {col.btnLabel}
+                  </button>
+                )}
               </div>
-            </div>
-          )}
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          {/* TAB: TEAM MONITOR */}
-          {activeTab === 'team-monitor' && user.role === 'Admin' && (
-             <div className="max-w-6xl mx-auto animation-fade-in">
-              <div className="mb-8">
-                <h2 className="text-2xl font-black text-white mb-2">Team Workload Monitor</h2>
-                <p className="text-slate-400 text-sm">Track real-time operational status and total historical output for standard users.</p>
+/* ── Team Monitor ───────────────────────── */
+function TeamTab({ users, tasks }) {
+  function isOnline(u) { return u.lastActive && Date.now()-new Date(u.lastActive).getTime()<90_000; }
+  function uTasks(uid) { return tasks.filter(t=>t.assignedTo?._id===uid||t.assignedTo===uid); }
+  const onlineCount = users.filter(isOnline).length;
+
+  return (
+    <div className="fade-up">
+      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:22 }}>
+        <div>
+          <h2 style={{ fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:800,color:'#1A1030',marginBottom:4 }}>Team Monitor</h2>
+          <p style={{ color:'#5E5A7A',fontSize:14 }}>Workload overview across all members</p>
+        </div>
+        <span style={{ display:'flex',alignItems:'center',gap:5,fontSize:13,color:'#16A34A',fontWeight:600,background:'#F0FDF4',padding:'6px 14px',borderRadius:999,border:'1.5px solid #BBF7D0' }}>
+          <span style={{ width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px rgba(34,197,94,.6)',display:'inline-block' }} />
+          {onlineCount} Online
+        </span>
+      </div>
+      <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:14 }}>
+        {users.map(u => {
+          const ut   = uTasks(u._id);
+          const utD  = ut.filter(t=>t.status==='Done').length;
+          const pct  = ut.length>0?Math.round((utD/ut.length)*100):0;
+          const ol   = isOnline(u);
+          const loads = [
+            { label:'To Do',       v:ut.filter(t=>t.status==='To Do').length,        bg:'#E0F2FE', c:'#0EA5E9' },
+            { label:'In Progress', v:ut.filter(t=>t.status==='In Progress').length,  bg:'#FFF8E1', c:'#B07900' },
+            { label:'Done',        v:utD,                                             bg:'#E0FAF5', c:'#007E69' },
+            { label:'Overdue',     v:ut.filter(t=>t.dueDate&&new Date(t.dueDate)<new Date()&&t.status!=='Done').length, bg:'#FFF0ED', c:'#FF5F40' },
+          ];
+          return (
+            <div key={u._id} style={{ background:'#fff',border:'1.5px solid #E4DFFF',borderRadius:14,padding:18,transition:'box-shadow .2s,transform .2s' }}
+              onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 16px rgba(108,71,255,.12)';e.currentTarget.style.transform='translateY(-2px)'}}
+              onMouseLeave={e=>{e.currentTarget.style.boxShadow='none';e.currentTarget.style.transform='none'}}>
+              <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:12 }}>
+                <div style={{ position:'relative',flexShrink:0 }}>
+                  <Avatar name={u.name} size={42} />
+                  <span style={{ width:9,height:9,borderRadius:'50%',background:ol?'#22C55E':'#9994B8',border:'2px solid white',position:'absolute',bottom:0,right:0,boxShadow:ol?'0 0 5px rgba(34,197,94,.6)':'none',display:'block' }} />
+                </div>
+                <div style={{ overflow:'hidden' }}>
+                  <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:14,color:'#1A1030',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis' }}>{u.name}</div>
+                  <div style={{ display:'flex',alignItems:'center',gap:6,marginTop:2 }}>
+                    <span style={{ padding:'1px 7px',borderRadius:999,fontSize:10,background:u.role==='admin'||u.role==='Admin'?'#EDE9FF':'#F3F0FF',color:u.role==='admin'||u.role==='Admin'?'#6C47FF':'#5E5A7A',fontWeight:600,textTransform:'capitalize' }}>{u.role}</span>
+                    <span style={{ fontSize:11,fontWeight:600,color:ol?'#22C55E':'#9994B8' }}>{ol?'● Online':'○ Offline'}</span>
+                  </div>
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {teamWorkloads.map((member, index) => (
-                  <div key={index} className="bg-slate-900/50 p-6 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden">
-                    <div className="flex items-center gap-4 mb-6 border-b border-slate-800 pb-4">
-                      <div className="w-10 h-10 rounded-full bg-amber-900/30 border border-amber-800 flex items-center justify-center text-amber-500 font-bold relative">{member.name.charAt(0).toUpperCase()}</div>
-                      <div>
-                        <h3 className="text-white font-bold flex items-center gap-2">{member.name}
-                          <span className="flex items-center gap-1 text-[9px] uppercase tracking-widest font-black">
-                            {member.isOnline ? <span className="text-emerald-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Online</span> : <span className="text-slate-500 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-600"></span> Offline</span>}
-                          </span>
-                        </h3>
-                        <p className="text-[10px] text-slate-500 uppercase tracking-widest mt-0.5">{member.role} • {member.total} Total Assigned</p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center"><span className="text-xs font-semibold text-slate-400">To Do</span><span className="text-sm font-bold text-indigo-400 bg-indigo-950/40 px-3 py-1 rounded-lg border border-indigo-900/50">{member.todo}</span></div>
-                      <div className="flex justify-between items-center"><span className="text-xs font-semibold text-slate-400">In Progress</span><span className="text-sm font-bold text-cyan-400 bg-cyan-950/40 px-3 py-1 rounded-lg border border-cyan-900/50">{member.inProgress}</span></div>
-                      <div className="flex justify-between items-center"><span className="text-xs font-semibold text-slate-400">Total Done (Inc. Archive)</span><span className="text-sm font-bold text-emerald-400 bg-emerald-950/40 px-3 py-1 rounded-lg border border-emerald-900/50">{member.done}</span></div>
-                      {member.overdue > 0 && <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center"><span className="text-xs font-bold text-red-500">⚠ Breached Deadlines</span><span className="text-sm font-bold text-red-400">{member.overdue}</span></div>}
-                    </div>
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:7,marginBottom:12 }}>
+                {loads.map(s=>(
+                  <div key={s.label} style={{ background:s.bg,borderRadius:8,padding:'7px 8px',textAlign:'center' }}>
+                    <div style={{ fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:18,color:s.c }}>{s.v}</div>
+                    <div style={{ fontSize:10,fontWeight:600,color:s.c,textTransform:'uppercase',letterSpacing:'.04em' }}>{s.label}</div>
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-
-          {/* TAB: CREATE PROJECT */}
-          {activeTab === 'init-project' && user.role === 'Admin' && (
-            <div className="max-w-2xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
-              <h2 className="text-2xl font-black text-white mb-2">Create Project</h2>
-              <form onSubmit={handleCreateProject} className="space-y-6 mt-8">
-                <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Project Name</label><input type="text" placeholder="Project Name..." className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} required /></div>
-                <button type="submit" className="w-full bg-white hover:bg-slate-200 text-slate-900 font-bold py-4 rounded-xl transition shadow-lg text-sm">Create Project</button>
-              </form>
-            </div>
-          )}
-
-          {/* TAB: ASSIGN TASKS */}
-          {activeTab === 'create-task' && user.role === 'Admin' && (
-            <div className="max-w-3xl mx-auto bg-slate-900/50 p-8 rounded-3xl border border-slate-800 shadow-2xl">
-              <h2 className="text-2xl font-black text-white mb-2">Create and Assign Tasks</h2>
-              <form onSubmit={handleCreateTask} className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-                <div className="md:col-span-2"><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Title</label><input type="text" placeholder="Task Title..." className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500" value={taskForm.title} onChange={(e) => setTaskForm({...taskForm, title: e.target.value})} required /></div>
-                <div className="md:col-span-2"><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Description</label><textarea placeholder="Task Description..." rows="3" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-white focus:ring-2 focus:ring-indigo-500 resize-none" value={taskForm.description} onChange={(e) => setTaskForm({...taskForm, description: e.target.value})} /></div>
-                <div className="md:col-span-2"><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Assign To User</label><select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.assignedTo} onChange={(e) => setTaskForm({...taskForm, assignedTo: e.target.value})}><option value="">Leave Unassigned</option>{usersList.map(u => (<option key={u._id} value={u._id}>{u.name} ({u.role})</option>))}</select></div>
-                <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Priority</label><select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.priority} onChange={(e) => setTaskForm({...taskForm, priority: e.target.value})}><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div>
-                <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Due Date</label><input type="date" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500 transition [color-scheme:dark]" value={taskForm.dueDate} onChange={(e) => setTaskForm({...taskForm, dueDate: e.target.value})} /></div>
-                <button type="submit" className="md:col-span-2 mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition shadow-lg text-sm" disabled={!projects.length}>{projects.length ? 'Assign Task' : '⚠️ No Projects Available'}</button>
-              </form>
-            </div>
-          )}
-
-          {/* TAB: TASK MANAGEMENT */}
-          {activeTab === 'task-management' && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full pb-10">
-              
-              <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
-                <h2 className="font-bold text-xs uppercase tracking-widest text-slate-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800"><span>📌 To Do</span> <span className="bg-slate-800 px-2 py-0.5 rounded text-[10px] font-black">{todoTasks.length}</span></h2>
-                <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                  {todoTasks.length === 0 ? <p className="text-slate-600 text-xs text-center mt-4">No pending tasks.</p> : null}
-                  {todoTasks.map(task => (
-                    <div key={task._id} className="bg-slate-900 p-4 rounded-xl border border-slate-700/60 shadow-sm relative overflow-hidden group">
-                      <div className={`absolute top-0 left-0 w-1 h-full ${task.priority === 'High' ? 'bg-red-500' : task.priority === 'Medium' ? 'bg-amber-500' : 'bg-slate-600'}`}></div>
-                      <h4 className="font-bold text-white text-sm tracking-tight pl-2">{task.title}</h4>
-                      <p className="text-xs text-slate-400 mt-2 pl-2 line-clamp-2">{task.description}</p>
-                      {task.dueDate && <p className="text-[10px] text-slate-500 mt-3 font-semibold pl-2">📅 Due: {new Date(task.dueDate).toLocaleDateString()}</p>}
-                      <button onClick={() => updateStatus(task._id, 'In Progress')} className="mt-4 ml-2 text-[11px] bg-slate-800 hover:bg-indigo-600/20 text-indigo-400 border border-slate-700 font-bold py-2 rounded-lg w-[calc(100%-8px)] transition text-center">Move to In Progress ➡️</button>
-                    </div>
-                  ))}
-                </div>
+              <div style={{ display:'flex',justifyContent:'space-between',fontSize:12,color:'#5E5A7A',marginBottom:5 }}>
+                <span>Progress</span><span style={{ fontWeight:700 }}>{pct}%</span>
               </div>
-
-              <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
-                <h2 className="font-bold text-xs uppercase tracking-widest text-cyan-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800"><span>⏳ In Progress</span> <span className="bg-cyan-950 text-cyan-400 px-2 py-0.5 rounded text-[10px] font-black">{inProgressTasks.length}</span></h2>
-                <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                  {inProgressTasks.length === 0 ? <p className="text-slate-600 text-xs text-center mt-4">No active tasks.</p> : null}
-                  {inProgressTasks.map(task => (
-                    <div key={task._id} className="bg-slate-900 p-4 rounded-xl border border-cyan-900/30 shadow-sm relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
-                      <h4 className="font-bold text-white text-sm tracking-tight pl-2">{task.title}</h4>
-                      <p className="text-xs text-slate-400 mt-2 pl-2 line-clamp-2">{task.description}</p>
-                      {task.startedAt && <p className="text-[10px] text-cyan-400 mt-3 font-semibold pl-2">⏱️ Elapsed: {formatCycleTime(task.startedAt, null)}</p>}
-                      <div className="grid grid-cols-2 gap-2 mt-4 pl-2">
-                        <button onClick={() => updateStatus(task._id, 'Todo')} className="text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">⬅️ To Do</button>
-                        <button onClick={() => updateStatus(task._id, 'Done')} className="text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition shadow-lg shadow-emerald-500/20">Mark Done ✓</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* ✅ DONE COLUMN (With Legacy Ghost Task Catcher) */}
-              <div className="bg-slate-900/30 p-4 rounded-2xl border border-slate-800/80 flex flex-col min-h-[500px]">
-                <h2 className="font-bold text-xs uppercase tracking-widest text-emerald-400 mb-4 flex items-center justify-between bg-slate-900/80 p-3 rounded-xl border border-slate-800"><span>✅ Done</span></h2>
-                <div className="space-y-3 flex-1 overflow-y-auto pr-1">
-                  
-                  {doneTasks.length > 0 ? (
-                    doneTasks.map(task => (
-                      <div key={task._id} className="bg-red-950/30 p-4 rounded-xl border border-red-900/50 shadow-sm">
-                        <p className="text-[10px] font-bold text-red-500 mb-2 uppercase tracking-widest">⚠️ Legacy Ghost Task</p>
-                        <h4 className="font-bold text-slate-300 text-sm line-through tracking-tight">{task.title}</h4>
-                        <div className="flex gap-2 mt-4">
-                          <button onClick={() => updateStatus(task._id, 'In Progress')} className="flex-1 text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded-lg transition">🔄 Revert</button>
-                          
-                          {/* Allow Admin to easily delete this stuck task */}
-                          {user.role === 'Admin' && (
-                            <button onClick={() => deleteTask(task._id)} className="flex-1 text-[10px] bg-red-900/40 hover:bg-red-600 text-red-400 hover:text-white font-bold py-2 rounded-lg transition border border-red-900/50 hover:border-transparent">🗑️ Delete</button>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="border border-dashed border-emerald-900/30 rounded-xl p-8 flex flex-col items-center justify-center h-full opacity-60 text-center">
-                        <span className="text-3xl mb-3">📁</span>
-                        <p className="text-slate-400 text-xs font-semibold">Automated Storage</p>
-                        <p className="text-slate-500 text-[10px] mt-2 leading-relaxed">When you mark a task as Done, it is instantly routed to your Completed Log to keep this board clean.</p>
-                    </div>
-                  )}
-
-                </div>
+              <div className="progress-bar">
+                <div className="progress-fill" style={{ width:`${pct}%`,background:`linear-gradient(90deg,${avatarColor(u.name)},#A78BFF)` }} />
               </div>
             </div>
-          )}
-        </main>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ── Create Project ─────────────────────── */
+function ProjectTab({ token, onSuccess }) {
+  const [form, setForm]       = useState({ name:'', description:'' });
+  const [msg,  setMsg]        = useState({ text:'', type:'' });
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault(); setMsg({ text:'', type:'' }); setLoading(true);
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/projects`, { method:'POST', headers: authHeaders(token), body: JSON.stringify(form) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || 'Failed');
+      setMsg({ text:'✅ Project created!', type:'success' });
+      setForm({ name:'', description:'' }); onSuccess();
+    } catch (err) { setMsg({ text:err.message, type:'error' }); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fade-up" style={{ maxWidth:520 }}>
+      <div style={{ marginBottom:22 }}>
+        <h2 style={{ fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:800,color:'#1A1030',marginBottom:4 }}>New Project</h2>
+        <p style={{ color:'#5E5A7A',fontSize:14 }}>Create a project to group related tasks</p>
+      </div>
+      <div className="card">
+        {msg.text && <div className={msg.type==='error'?'alert-error':'alert-success'}>{msg.text}</div>}
+        <form onSubmit={onSubmit}>
+          <div className="field">
+            <label className="label">Project Name</label>
+            <input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Q3 Product Launch" required />
+          </div>
+          <div className="field">
+            <label className="label">Description</label>
+            <textarea className="input" rows={4} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="What is this project about?" style={{ resize:'vertical' }} />
+          </div>
+          <button className="btn btn-primary" style={{ width:'100%' }} type="submit" disabled={loading}>
+            {loading ? <span className="spinner" /> : '📁 Create Project'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ── Assign Task ────────────────────────── */
+function AssignTab({ users, projects, token, onSuccess }) {
+  const [form, setForm]       = useState({ title:'', description:'', assignedTo:'', priority:'Medium', dueDate:'', project:'' });
+  const [msg,  setMsg]        = useState({ text:'', type:'' });
+  const [loading, setLoading] = useState(false);
+
+  const onSubmit = async (e) => {
+    e.preventDefault(); setMsg({ text:'', type:'' }); setLoading(true);
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/tasks`, { method:'POST', headers: authHeaders(token), body: JSON.stringify(form) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.message || 'Failed');
+      setMsg({ text:'🎯 Task assigned!', type:'success' });
+      setForm({ title:'', description:'', assignedTo:'', priority:'Medium', dueDate:'', project:'' }); onSuccess();
+    } catch (err) { setMsg({ text:err.message, type:'error' }); }
+    setLoading(false);
+  };
+
+  return (
+    <div className="fade-up" style={{ maxWidth:560 }}>
+      <div style={{ marginBottom:22 }}>
+        <h2 style={{ fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:800,color:'#1A1030',marginBottom:4 }}>Assign Task</h2>
+        <p style={{ color:'#5E5A7A',fontSize:14 }}>Create and assign a task to a team member</p>
+      </div>
+      <div className="card">
+        {msg.text && <div className={msg.type==='error'?'alert-error':'alert-success'}>{msg.text}</div>}
+        <form onSubmit={onSubmit}>
+          <div className="field">
+            <label className="label">Task Title</label>
+            <input className="input" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="e.g. Build login page" required />
+          </div>
+          <div className="field">
+            <label className="label">Description</label>
+            <textarea className="input" rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Describe the task..." style={{ resize:'vertical' }} />
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:14 }}>
+            <div className="field">
+              <label className="label">Assign To</label>
+              <select className="input" value={form.assignedTo} onChange={e=>setForm({...form,assignedTo:e.target.value})} required style={{ cursor:'pointer' }}>
+                <option value="">— Select member —</option>
+                {users.map(u=><option key={u._id} value={u._id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Priority</label>
+              <select className="input" value={form.priority} onChange={e=>setForm({...form,priority:e.target.value})} style={{ cursor:'pointer' }}>
+                <option value="High">🔴 High</option>
+                <option value="Medium">🟡 Medium</option>
+                <option value="Low">🟢 Low</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:14 }}>
+            <div className="field">
+              <label className="label">Project</label>
+              <select className="input" value={form.project} onChange={e=>setForm({...form,project:e.target.value})} style={{ cursor:'pointer' }}>
+                <option value="">— No project —</option>
+                {projects.map(p=><option key={p._id} value={p._id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label className="label">Due Date</label>
+              <input className="input" type="date" value={form.dueDate} onChange={e=>setForm({...form,dueDate:e.target.value})} />
+            </div>
+          </div>
+          <button className="btn btn-coral" style={{ width:'100%' }} type="submit" disabled={loading}>
+            {loading ? <span className="spinner" /> : '🎯 Assign Task'}
+          </button>
+        </form>
       </div>
     </div>
   );
