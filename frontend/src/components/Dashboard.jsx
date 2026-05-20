@@ -160,7 +160,7 @@ export default function Dashboard() {
     { id:'tasks',     label:'Task Board',   icon:'✅' },
     ...(isAdmin ? [
       { id:'monitor', label:'Team Monitor', icon:'👥' },
-      { id:'project', label:'New Project',  icon:'📁' },
+      { id:'project', label:'Projects',     icon:'📁' },
       { id:'assign',  label:'Assign Task',  icon:'🎯' },
     ] : []),
   ];
@@ -238,7 +238,7 @@ export default function Dashboard() {
           {tab === 'dashboard' && <DashTab myTasks={myTasks} todo={todo} inProg={inProg} done={done} overdue={overdue} isAdmin={isAdmin} totalTasks={tasks.length} />}
           {tab === 'tasks'     && <KanbanTab todo={todo} inProg={inProg} done={done} updateStatus={updateTaskStatus} />}
           {tab === 'monitor'   && isAdmin && <TeamTab users={users} tasks={tasks} />}
-          {tab === 'project'   && isAdmin && <ProjectTab token={token} onSuccess={fetchData} />}
+          {tab === 'project'   && isAdmin && <ProjectTab token={token} onSuccess={fetchData} tasks={tasks} projects={projects} />}
           {tab === 'assign'    && isAdmin && <AssignTab users={users} projects={projects} token={token} onSuccess={fetchData} />}
         </main>
       </div>
@@ -438,11 +438,15 @@ function TeamTab({ users, tasks }) {
   );
 }
 
-/* ── Create Project ─────────────────────── */
-function ProjectTab({ token, onSuccess }) {
-  const [form, setForm]       = useState({ name:'', description:'' });
-  const [msg,  setMsg]        = useState({ text:'', type:'' });
-  const [loading, setLoading] = useState(false);
+/* ── Projects Tab ─────────────────────────── */
+function ProjectTab({ token, onSuccess, tasks, projects }) {
+  const [showForm,  setShowForm]  = useState(false);
+  const [form,      setForm]      = useState({ name:'', description:'' });
+  const [msg,       setMsg]       = useState({ text:'', type:'' });
+  const [loading,   setLoading]   = useState(false);
+  const [expanded,  setExpanded]  = useState({});
+
+  const toggle = (id) => setExpanded(p => ({ ...p, [id]: !p[id] }));
 
   const onSubmit = async (e) => {
     e.preventDefault(); setMsg({ text:'', type:'' }); setLoading(true);
@@ -451,32 +455,182 @@ function ProjectTab({ token, onSuccess }) {
       const d = await r.json();
       if (!r.ok) throw new Error(d.message || 'Failed');
       setMsg({ text:'✅ Project created!', type:'success' });
-      setForm({ name:'', description:'' }); onSuccess();
+      setForm({ name:'', description:'' });
+      setShowForm(false);
+      onSuccess();
     } catch (err) { setMsg({ text:err.message, type:'error' }); }
     setLoading(false);
   };
 
+  const statusColor = { Todo:'#0EA5E9', 'In Progress':'#FFAB00', Done:'#00C9A7' };
+  const statusBg    = { Todo:'#E0F2FE', 'In Progress':'#FFF8E1', Done:'#E0FAF5' };
+  const priorityColor = { High:'#FF5F40', Medium:'#FFAB00', Low:'#00C9A7' };
+
   return (
-    <div className="fade-up" style={{ maxWidth:520 }}>
-      <div style={{ marginBottom:22 }}>
-        <h2 style={{ fontFamily:"'Syne',sans-serif",fontSize:26,fontWeight:800,color:'#1A1030',marginBottom:4 }}>New Project</h2>
-        <p style={{ color:'#5E5A7A',fontSize:14 }}>Create a project to group related tasks</p>
+    <div className="fade-up">
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end', marginBottom:22 }}>
+        <div>
+          <h2 style={{ fontFamily:"'Syne',sans-serif", fontSize:26, fontWeight:800, color:'#1A1030', marginBottom:4 }}>Projects</h2>
+          <p style={{ color:'#5E5A7A', fontSize:14 }}>{projects.length} project{projects.length !== 1 ? 's' : ''} · {tasks.length} total tasks</p>
+        </div>
+        <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setMsg({ text:'', type:'' }); }}>
+          {showForm ? '✕ Cancel' : '＋ New Project'}
+        </button>
       </div>
-      <div className="card">
-        {msg.text && <div className={msg.type==='error'?'alert-error':'alert-success'}>{msg.text}</div>}
-        <form onSubmit={onSubmit}>
-          <div className="field">
-            <label className="label">Project Name</label>
-            <input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Q3 Product Launch" required />
-          </div>
-          <div className="field">
-            <label className="label">Description</label>
-            <textarea className="input" rows={4} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="What is this project about?" style={{ resize:'vertical' }} />
-          </div>
-          <button className="btn btn-primary" style={{ width:'100%' }} type="submit" disabled={loading}>
-            {loading ? <span className="spinner" /> : '📁 Create Project'}
-          </button>
-        </form>
+
+      {/* Create form */}
+      {showForm && (
+        <div className="card" style={{ marginBottom:20, borderColor:'#6C47FF', borderWidth:2 }}>
+          <h3 style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#1A1030', marginBottom:14 }}>📁 Create New Project</h3>
+          {msg.text && <div className={msg.type==='error'?'alert-error':'alert-success'}>{msg.text}</div>}
+          <form onSubmit={onSubmit}>
+            <div className="field">
+              <label className="label">Project Name</label>
+              <input className="input" value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="e.g. Q3 Product Launch" required />
+            </div>
+            <div className="field">
+              <label className="label">Description</label>
+              <textarea className="input" rows={3} value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="What is this project about?" style={{ resize:'vertical' }} />
+            </div>
+            <button className="btn btn-primary" style={{ width:'100%' }} type="submit" disabled={loading}>
+              {loading ? <span className="spinner" /> : '📁 Create Project'}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* Project list */}
+      {projects.length === 0 && !showForm && (
+        <div style={{ textAlign:'center', padding:'60px 20px', background:'#fff', borderRadius:14, border:'2px dashed #E4DFFF' }}>
+          <div style={{ fontSize:40, marginBottom:12 }}>📁</div>
+          <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:16, color:'#1A1030', marginBottom:6 }}>No projects yet</div>
+          <div style={{ color:'#5E5A7A', fontSize:14, marginBottom:20 }}>Create your first project to start organising tasks</div>
+          <button className="btn btn-primary" onClick={() => setShowForm(true)}>＋ Create First Project</button>
+        </div>
+      )}
+
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        {projects.map(proj => {
+          const projTasks = tasks.filter(t => t.project?._id === proj._id || t.project === proj._id);
+          const todoCnt   = projTasks.filter(t => t.status === 'Todo').length;
+          const progCnt   = projTasks.filter(t => t.status === 'In Progress').length;
+          const doneCnt   = projTasks.filter(t => t.status === 'Done').length;
+          const pct       = projTasks.length > 0 ? Math.round((doneCnt / projTasks.length) * 100) : 0;
+          const isOpen    = expanded[proj._id];
+
+          return (
+            <div key={proj._id} style={{ background:'#fff', border:'1.5px solid #E4DFFF', borderRadius:14, overflow:'hidden', transition:'box-shadow .2s', boxShadow: isOpen ? '0 4px 20px rgba(108,71,255,.1)' : 'none' }}>
+              {/* Project header row */}
+              <div
+                onClick={() => toggle(proj._id)}
+                style={{ display:'flex', alignItems:'center', gap:14, padding:'16px 20px', cursor:'pointer', userSelect:'none',
+                  background: isOpen ? '#F8F7FF' : '#fff', borderBottom: isOpen ? '1.5px solid #E4DFFF' : 'none' }}
+              >
+                <div style={{ width:40, height:40, borderRadius:11, background:'linear-gradient(135deg,#6C47FF,#A78BFF)',
+                  display:'flex', alignItems:'center', justifyContent:'center', color:'#fff',
+                  fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:18, flexShrink:0 }}>
+                  {proj.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                    <span style={{ fontFamily:"'Syne',sans-serif", fontWeight:700, fontSize:15, color:'#1A1030' }}>{proj.name}</span>
+                    <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:999, background:'#EDE9FF', color:'#6C47FF' }}>
+                      {projTasks.length} task{projTasks.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {proj.description && (
+                    <div style={{ fontSize:12, color:'#5E5A7A', overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>{proj.description}</div>
+                  )}
+                </div>
+
+                {/* Mini status pills */}
+                <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                  {[{l:'Todo',v:todoCnt,bg:'#E0F2FE',c:'#0EA5E9'},{l:'Prog',v:progCnt,bg:'#FFF8E1',c:'#B07900'},{l:'Done',v:doneCnt,bg:'#E0FAF5',c:'#007E69'}].map(s=>(
+                    <div key={s.l} style={{ background:s.bg, borderRadius:8, padding:'4px 10px', textAlign:'center', minWidth:40 }}>
+                      <div style={{ fontFamily:"'Syne',sans-serif", fontWeight:800, fontSize:14, color:s.c }}>{s.v}</div>
+                      <div style={{ fontSize:9, fontWeight:600, color:s.c, textTransform:'uppercase' }}>{s.l}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Progress */}
+                <div style={{ width:80, flexShrink:0 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'#5E5A7A', marginBottom:4 }}>
+                    <span>Progress</span><span style={{ fontWeight:700 }}>{pct}%</span>
+                  </div>
+                  <div className="progress-bar">
+                    <div className="progress-fill" style={{ width:`${pct}%`, background:'linear-gradient(90deg,#6C47FF,#00C9A7)' }} />
+                  </div>
+                </div>
+
+                <span style={{ fontSize:18, color:'#9994B8', flexShrink:0, transition:'transform .2s', transform: isOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+              </div>
+
+              {/* Expanded task list */}
+              {isOpen && (
+                <div style={{ padding:'0 20px 16px' }}>
+                  {projTasks.length === 0 ? (
+                    <div style={{ textAlign:'center', padding:'24px', color:'#9994B8', fontSize:13, marginTop:14,
+                      border:'2px dashed #E4DFFF', borderRadius:10 }}>
+                      No tasks assigned to this project yet — use <strong>Assign Task</strong> to add some.
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                      {/* Column headers */}
+                      <div style={{ display:'grid', gridTemplateColumns:'1fr 100px 90px 90px', gap:12, padding:'10px 12px',
+                        fontSize:10, fontWeight:700, color:'#9994B8', textTransform:'uppercase', letterSpacing:'.06em',
+                        borderBottom:'1.5px solid #F3F0FF', marginTop:10 }}>
+                        <span>Task</span><span>Assigned To</span><span>Priority</span><span>Status</span>
+                      </div>
+                      {projTasks.map((task,idx) => (
+                        <div key={task._id} style={{ display:'grid', gridTemplateColumns:'1fr 100px 90px 90px', gap:12,
+                          padding:'10px 12px', alignItems:'center',
+                          background: idx % 2 === 0 ? '#FAFAFA' : '#fff',
+                          borderRadius: idx === projTasks.length-1 ? '0 0 10px 10px' : 0,
+                          borderLeft:`3px solid ${priorityColor[task.priority] || '#E4DFFF'}` }}>
+                          <div>
+                            <div style={{ fontWeight:600, fontSize:13, color:'#1A1030' }}>{task.title}</div>
+                            {task.description && <div style={{ fontSize:11, color:'#9994B8', marginTop:2 }}>{task.description}</div>}
+                            {task.dueDate && (
+                              <div style={{ fontSize:10, color: new Date(task.dueDate)<new Date()&&task.status!=='Done' ? '#FF5F40' : '#9994B8', marginTop:2 }}>
+                                📅 {new Date(task.dueDate).toLocaleDateString()}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                            {task.assignedTo ? (
+                              <>
+                                <div style={{ width:22, height:22, borderRadius:'50%', background:avatarColor(task.assignedTo.name||'?'),
+                                  color:'#fff', display:'flex', alignItems:'center', justifyContent:'center',
+                                  fontSize:10, fontWeight:800, flexShrink:0 }}>
+                                  {(task.assignedTo.name||'?').charAt(0).toUpperCase()}
+                                </div>
+                                <span style={{ fontSize:12, color:'#5E5A7A', overflow:'hidden', whiteSpace:'nowrap', textOverflow:'ellipsis' }}>
+                                  {task.assignedTo.name}
+                                </span>
+                              </>
+                            ) : <span style={{ fontSize:12, color:'#9994B8' }}>Unassigned</span>}
+                          </div>
+                          <span style={{ fontSize:11, fontWeight:600, padding:'3px 8px', borderRadius:999,
+                            background: task.priority==='High'?'#FFF0ED':task.priority==='Low'?'#E0FAF5':'#FFF8E1',
+                            color: priorityColor[task.priority]||'#B07900', display:'inline-block' }}>
+                            {task.priority||'Medium'}
+                          </span>
+                          <span style={{ fontSize:11, fontWeight:600, padding:'3px 8px', borderRadius:999,
+                            background: statusBg[task.status]||'#F3F0FF',
+                            color: statusColor[task.status]||'#6C47FF', display:'inline-block', whiteSpace:'nowrap' }}>
+                            {task.status === 'Todo' ? 'To Do' : task.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
