@@ -29,6 +29,20 @@ export default function Dashboard() {
     fetch(`${BACKEND_URL}/api/auth/ping`, { method: 'POST', headers: { 'x-auth-token': token } }).catch(err => console.log("Ping skipped"));
   };
 
+  // --- NEW: Handle Logout properly to set offline status ---
+  const handleLogout = async () => {
+    try {
+      await fetch(`${BACKEND_URL}/api/auth/logout`, {
+        method: 'POST',
+        headers: { 'x-auth-token': token }
+      });
+    } catch (e) {
+      console.error("Logout ping failed", e);
+    }
+    localStorage.clear();
+    navigate('/');
+  };
+
   const fetchData = async () => {
     try {
       const headers = { 'x-auth-token': token };
@@ -120,6 +134,7 @@ export default function Dashboard() {
 
   const monitoredUsers = usersList.filter(u => u.role !== 'Admin' && u.role !== 'admin');
 
+  // --- UPDATED: Foolproof Task Counting Logic ---
   const teamWorkloads = monitoredUsers.map(dbUser => {
     const assignedTasks = rawTasks.filter(t => t.assignedTo && (t.assignedTo._id === dbUser._id || t.assignedTo === dbUser._id));
     
@@ -130,10 +145,19 @@ export default function Dashboard() {
     
     assignedTasks.forEach(t => {
       const status = t.status?.toLowerCase() || 'todo';
-      if (status.includes('todo') || status === 'to do') todo++;
-      else if (status === 'in progress') inProgress++;
-      else if (status === 'done' || t.isArchived) done++; 
-      if (t.dueDate && new Date(t.dueDate) < new Date() && status !== 'done' && !t.isArchived) overdue++;
+      
+      // Strict isolation of statuses to ensure perfect tracking
+      if (t.isArchived || status === 'done') {
+        done++;
+      } else if (status === 'in progress') {
+        inProgress++;
+      } else {
+        todo++;
+      }
+      
+      if (t.dueDate && new Date(t.dueDate) < new Date() && !t.isArchived && status !== 'done') {
+        overdue++;
+      }
     });
 
     return { name: dbUser.name, role: dbUser.role, isOnline, total: assignedTasks.length, todo, inProgress, done, overdue };
@@ -212,7 +236,8 @@ export default function Dashboard() {
               {activeTab.replace('-', ' ')}
             </h1>
           </div>
-          <button onClick={() => { localStorage.clear(); navigate('/'); }} className="flex items-center bg-slate-900 hover:bg-red-950/40 text-slate-300 hover:text-red-400 font-semibold px-4 py-2 rounded-xl transition border border-slate-800 hover:border-red-900/60 text-xs">
+          {/* UPDATED LOGOUT BUTTON */}
+          <button onClick={handleLogout} className="flex items-center bg-slate-900 hover:bg-red-950/40 text-slate-300 hover:text-red-400 font-semibold px-4 py-2 rounded-xl transition border border-slate-800 hover:border-red-900/60 text-xs">
             <IconLogout /> Log Out
           </button>
         </header>
@@ -284,7 +309,7 @@ export default function Dashboard() {
                       <thead>
                         <tr className="bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-400">
                           <th className="p-4 font-bold">Task Title</th>
-                          <th className="p-4 font-bold">Assigned To</th> {/* NEW: User column */}
+                          <th className="p-4 font-bold">Assigned To</th>
                           <th className="p-4 font-bold">Priority</th>
                           <th className="p-4 font-bold">Time Taken</th>
                           <th className="p-4 font-bold">Completed On</th>
@@ -298,7 +323,6 @@ export default function Dashboard() {
                               <p className="text-sm font-bold text-slate-200">{task.title}</p>
                               <p className="text-xs text-slate-500 truncate max-w-xs">{task.description}</p>
                             </td>
-                            {/* NEW: Displaying the assigned user's name */}
                             <td className="p-4">
                               <p className="text-xs font-bold text-indigo-300 bg-indigo-900/20 inline-block px-2 py-1 rounded-md border border-indigo-900/50">
                                 {task.assignedTo?.name || 'Unassigned'}
@@ -383,7 +407,6 @@ export default function Dashboard() {
                 <div className="md:col-span-2"><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Assign To User</label><select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.assignedTo} onChange={(e) => setTaskForm({...taskForm, assignedTo: e.target.value})}><option value="">Leave Unassigned</option>{usersList.map(u => (<option key={u._id} value={u._id}>{u.name} ({u.role})</option>))}</select></div>
                 <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Priority</label><select className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500" value={taskForm.priority} onChange={(e) => setTaskForm({...taskForm, priority: e.target.value})}><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div>
                 
-                {/* NEW: CSS hack [color-scheme:dark] added to force the browser to render the white calendar icon */}
                 <div><label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Due Date</label><input type="date" className="w-full bg-slate-950 border border-slate-700 p-4 rounded-xl outline-none text-slate-200 focus:ring-2 focus:ring-indigo-500 transition [color-scheme:dark]" value={taskForm.dueDate} onChange={(e) => setTaskForm({...taskForm, dueDate: e.target.value})} /></div>
                 
                 <button type="submit" className="md:col-span-2 mt-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl transition shadow-lg text-sm" disabled={!projects.length}>{projects.length ? 'Assign Task' : '⚠️ No Projects Available'}</button>

@@ -4,9 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// =========================================================================
 // 1. REGISTER ROUTE
-// =========================================================================
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
@@ -20,15 +18,11 @@ router.post('/register', async (req, res) => {
     await user.save();
     res.status(201).json({ message: 'User created successfully' });
   } catch (err) {
-    console.error("\n=== REGISTRATION ERROR ===");
-    console.error(err);
     res.status(500).json({ message: 'Server error', details: err.message });
   }
 });
 
-// =========================================================================
 // 2. LOGIN ROUTE
-// =========================================================================
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -39,7 +33,6 @@ router.post('/login', async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid email or password' });
 
-    // Update their online status immediately upon logging in
     user.lastActive = new Date();
     await user.save();
 
@@ -55,23 +48,17 @@ router.post('/login', async (req, res) => {
     });
     
   } catch (err) {
-    console.error("\n=== LOGIN ERROR ===");
-    console.error(err);
     res.status(500).json({ message: 'Server error', details: err.message });
   }
 });
 
-// =========================================================================
-// 3. HEARTBEAT PING ROUTE (Real-time online status)
-// =========================================================================
+// 3. HEARTBEAT PING ROUTE
 router.post('/ping', async (req, res) => {
   try {
     const token = req.header('x-auth-token');
     if (!token) return res.status(401).send();
     
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_change_this_later');
-    
-    // Update their last active time to exactly right now
     await User.findByIdAndUpdate(decoded.id, { lastActive: new Date() });
     
     return res.status(200).send({ success: true });
@@ -80,18 +67,31 @@ router.post('/ping', async (req, res) => {
   }
 });
 
-// =========================================================================
-// 4. GET ALL USERS (For Admin Monitor & Task Assignment)
-// =========================================================================
+// --- NEW: 4. LOGOUT ROUTE (Instantly sets user to offline) ---
+router.post('/logout', async (req, res) => {
+  try {
+    const token = req.header('x-auth-token');
+    if (!token) return res.status(200).send();
+    
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_change_this_later');
+    
+    // Set their last active time far into the past so they instantly show as Offline
+    await User.findByIdAndUpdate(decoded.id, { lastActive: new Date(0) });
+    
+    return res.status(200).send({ success: true });
+  } catch (err) {
+    return res.status(200).send(); 
+  }
+});
+
+// 5. GET ALL USERS
 router.get('/users', async (req, res) => {
   try {
     const token = req.header('x-auth-token');
     if (!token) return res.status(401).send();
     
-    // Verify token to ensure security
     jwt.verify(token, process.env.JWT_SECRET || 'super_secret_key_change_this_later');
     
-    // Fetch all users but exclude their passwords for security
     const users = await User.find().select('-password');
     return res.status(200).json(users);
   } catch (err) {
