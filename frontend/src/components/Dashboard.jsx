@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
+const BACKEND_URL = "https://team-task-manager-redesigned-production.up.railway.app";
 
 function authHeaders(token) {
   return { 'Content-Type': 'application/json', 'x-auth-token': token };

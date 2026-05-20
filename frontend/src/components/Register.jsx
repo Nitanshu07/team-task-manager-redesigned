@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const BACKEND_URL = "https://team-task-manager-production-58d4.up.railway.app";
+const BACKEND_URL = "https://team-task-manager-redesigned-production.up.railway.app";
 
 export default function Register() {
   const [form, setForm]       = useState({ name:"", email:"", password:"", role:"user" });
